@@ -5,8 +5,9 @@
 **Mac 系统级英文阅读助手**：选中即查、截图即问、长文精读——由你自己的大模型 API Key 驱动（默认 MiniMax M3，支持任意 OpenAI 兼容端点）。
 
 <p align="center">
+  <img src="docs/screenshots/screenshot-reading.png" width="880" alt="⌥S 截图即问：框选英文文档区域，读图翻译+术语解释">
+  <br>
   <img src="docs/screenshots/word-card.png" width="420" alt="划词词卡">
-  <img src="docs/screenshots/screenshot-card.png" width="420" alt="截图读图">
 </p>
 
 ## 为什么做它

@@ -5,8 +5,9 @@ English | [简体中文](README.md)
 **System-level English reading assistant for macOS**: select to look up, capture to ask, deep-read long articles — powered by your own LLM API key (MiniMax M3 by default, any OpenAI-compatible endpoint supported).
 
 <p align="center">
+  <img src="docs/screenshots/screenshot-reading.png" width="880" alt="Screenshot reading: frame any English text region, get translation + term notes">
+  <br>
   <img src="docs/screenshots/word-card.png" width="420" alt="Word card">
-  <img src="docs/screenshots/screenshot-card.png" width="420" alt="Screenshot reading">
 </p>
 
 ## Why
