@@ -30,10 +30,14 @@ Reading English documents today means switching to a dictionary site for unknown
 
 Grab the latest `Gloss-vX.Y.Z.zip` from [Releases](../../releases) and unzip to get `Gloss.app`.
 
-> **First launch**: the app is distributed with a locally self-signed certificate (not Apple notarized). Right-click → Open on first launch, or run:
+> **First launch**: the app is signed with an Apple Development certificate (not Apple notarized), so macOS blocks the first launch. Unblock with either:
+> - **System Settings → Privacy & Security**, find the notice about Gloss, click **"Open Anyway"** (recommended on macOS 15+);
+> - or run in Terminal:
 > ```bash
 > xattr -cr /path/to/Gloss.app
 > ```
+>
+> On macOS 14, right-click the app → Open also works.
 
 **Requires**: macOS 14 (Sonoma) or later, Apple Silicon.
 
@@ -73,6 +77,7 @@ open Gloss.xcodeproj   # Xcode 16+, just Cmd+R
 - Zero third-party dependencies — system frameworks only (AppKit / SwiftUI / SwiftData / PDFKit / AVFoundation / Carbon)
 - Logic self-check: compile `SelfCheck/main.swift` together with the core logic files and run it (65 assertions across routing / SSE / section extraction / cache keys / image pipeline)
 - Signing: Xcode automatic signing or any local self-signed certificate works; no feature depends on a specific identity
+- Packaging: `scripts/release.sh` builds the Release binary and produces both the local install bundle and the distributable zip in one shot (build + signature verification + ditto)
 
 ## Technical notes
 

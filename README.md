@@ -30,10 +30,14 @@
 
 从 [Releases](../../releases) 下载最新的 `Gloss-vX.Y.Z.zip`，解压得到 `Gloss.app`。
 
-> **首次打开**：App 使用本地自签证书分发（未经过 Apple 公证），首次打开请**右键 → 打开**，或在终端执行：
+> **首次打开**：App 使用 Apple Development 证书签名（未经过 Apple 公证），macOS 会拦截首次启动，任选其一放行：
+> - **系统设置 → 隐私与安全性**，找到关于 Gloss 的提示，点「**仍要打开**」（macOS 15+ 推荐方式）；
+> - 或在终端执行：
 > ```bash
 > xattr -cr /path/to/Gloss.app
 > ```
+>
+> macOS 14 也可右键 App → 打开。
 
 **系统要求**：macOS 14（Sonoma）及以上，Apple Silicon。
 
@@ -73,6 +77,7 @@ open Gloss.xcodeproj   # Xcode 16+，直接 Cmd+R 运行
 - 纯系统框架（AppKit / SwiftUI / SwiftData / PDFKit / AVFoundation / Carbon / Vision-free），唯一依赖为零
 - 逻辑自检：`SelfCheck/main.swift` 与核心纯逻辑文件联合编译即可运行（路由/SSE/分节提取/缓存键/图像管线共 65 项断言）
 - 签名：使用 Xcode 自动签名或本地自签证书均可；功能不依赖特定签名
+- 规范打包：`scripts/release.sh` 一条命令产出本机安装包与发布 zip（Release 构建 + 签名验证 + ditto 打包）
 
 ## 技术要点
 
