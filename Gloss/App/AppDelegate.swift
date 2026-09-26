@@ -1,9 +1,16 @@
 import AppKit
 import Carbon.HIToolbox
+import Sparkle
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
+    private let releasesPageURL = URL(string: "https://github.com/yujuntea/gloss/releases")!
+    // 首次访问发生在 setupStatusItem（applicationDidFinishLaunching 调用链内），
+    // 保证 Sparkle updater 在 app 基本初始化后才启动
+    private lazy var updaterController = SPUStandardUpdaterController(startingUpdater: true,
+                                                                      updaterDelegate: nil,
+                                                                      userDriverDelegate: nil)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -55,6 +62,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mHistory.target = self
         menu.addItem(mHistory)
         menu.addItem(.separator())
+        // 更新检查菜单项的目标是 Sparkle 控制器:它自带菜单校验,检查不可用时自动置灰
+        let mCheckUpdates = NSMenuItem(title: "检查更新…",
+                                       action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                                       keyEquivalent: "")
+        mCheckUpdates.target = updaterController
+        menu.addItem(mCheckUpdates)
+        let mReleasesPage = NSMenuItem(title: "前往下载页…", action: #selector(openReleasesPage), keyEquivalent: "")
+        mReleasesPage.target = self
+        menu.addItem(mReleasesPage)
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: PermissionCenter.summaryLine(), action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "退出 Gloss", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -92,6 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() { WindowManager.shared.showSettings() }
     @objc private func openHistory() { WindowManager.shared.showHistory() }
+    @objc private func openReleasesPage() { NSWorkspace.shared.open(releasesPageURL) }
 
     // MARK: 启动参数（验收/调试用）
 
@@ -114,6 +132,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         if args.contains("-seed-history") { DataStore.seedDemoHistory() }
+        // 注意:此分支必须保持在下方所有带 return 的 demo 分支之前,否则会被提前 return 截断
+        if args.contains("-check-updates") {
+            // 验收/调试钩子:启动 1 秒后触发一次更新检查(等 Sparkle updater 完成内部初始化)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.updaterController.checkForUpdates(nil)
+            }
+        }
         if args.contains("-onboarding") { WindowManager.shared.showOnboarding(); return }
         if args.contains("-settings") { WindowManager.shared.showSettings(); return }
         if args.contains("-history") { WindowManager.shared.showHistory(); return }

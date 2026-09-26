@@ -3,3 +3,4 @@ build/
 *.store
 xcuserdata/
 dist/
+.tools/

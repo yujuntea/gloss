@@ -30,6 +30,10 @@
 
 从 [Releases](../../releases) 下载最新的 `Gloss-vX.Y.Z.zip`，解压得到 `Gloss.app`。
 
+**自动更新**：v0.1.3 起 App 内置更新检查（基于 [Sparkle](https://sparkle-project.org)，更新包经 EdDSA 签名校验）。菜单栏图标 → 「检查更新…」手动检查；第二次启动会询问是否允许后台定期检查，允许后自动发现新版本弹出更新说明，点击即可下载安装并重启，无需再手动下载。
+
+> v0.1.2 及更早版本无内置更新，请手动下载 v0.1.3 一次，之后即可自动更新。
+
 > **首次打开**：App 使用 Apple Development 证书签名（未经过 Apple 公证），macOS 会拦截首次启动，任选其一放行：
 > - **系统设置 → 隐私与安全性**，找到关于 Gloss 的提示，点「**仍要打开**」（macOS 15+ 推荐方式）；
 > - 或在终端执行：
@@ -74,10 +78,11 @@ cd gloss
 open Gloss.xcodeproj   # Xcode 16+，直接 Cmd+R 运行
 ```
 
-- 纯系统框架（AppKit / SwiftUI / SwiftData / PDFKit / AVFoundation / Carbon / Vision-free），唯一依赖为零
+- 系统框架为主（AppKit / SwiftUI / SwiftData / PDFKit / AVFoundation / Carbon / Vision-free），唯一第三方依赖为 [Sparkle](https://github.com/sparkle-project/Sparkle) 2.10+（更新框架，SPM 拉取）
 - 逻辑自检：`SelfCheck/main.swift` 与核心纯逻辑文件联合编译即可运行（路由/SSE/分节提取/缓存键/图像管线共 65 项断言）
-- 签名：使用 Xcode 自动签名或本地自签证书均可；功能不依赖特定签名
-- 规范打包：`scripts/release.sh` 一条命令产出本机安装包与发布 zip（Release 构建 + 签名验证 + ditto 打包）
+- 签名：使用 Xcode 自动签名或本地自签证书均可；功能不依赖特定签名。**注意**：自动更新链锚定发布方的 EdDSA 密钥对——自编译版本会正常接受官方更新包并覆盖本地产物，请按需忽略更新提示或从 Releases 手动安装；发布方更换/丢失 EdDSA 私钥才会使老用户的自动更新断链
+- 规范打包发布：`scripts/release.sh` 一条命令完成 Release 构建 → 签名验证 → ditto 打 zip → 生成 Sparkle 更新描述（`dist/appcast.xml`，`sign_update` EdDSA 签名）；加 `--publish` 再创建 GitHub Release 并上传 zip 与 appcast，App 端即收到更新提醒
+- 更新签名密钥：`generate_keys` 生成的 EdDSA 私钥保存在登录钥匙串，**务必另存备份**（`generate_keys -x <文件>`）；私钥丢失后无法再向老用户推送自动更新
 
 ## 技术要点
 
