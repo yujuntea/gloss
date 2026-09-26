@@ -19,10 +19,24 @@ enum AXTextFetcher {
 
     /// 主线程外调用。预算 ~150ms，超时返回 nil。primaryHeight=主屏 Cocoa 高度（主线程预取注入——NSScreen 非主线程访问不安全，K3-P2-10）
     static func fetchWithBudget(_ seconds: Double = 0.15, primaryHeight: CGFloat?) -> CaptureResult? {
-        let deadline = DispatchTime.now() + seconds
-        guard let app = copyElement(AXUIElementCreateSystemWide(), kFocusedApp),
-              let focused = copyElement(app, kFocusedUI) else { return nil }
-        if let t = copyString(focused, kSelectedText), !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let start = DispatchTime.now()
+        let deadline = start + seconds
+        GlossLog.debug("ax diag begin trusted=\(AXIsProcessTrusted())")
+        var appEl: CFTypeRef?
+        let e1 = AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kFocusedApp, &appEl)
+        GlossLog.debug("ax diag focusedApp err=\(e1.rawValue) elapsed=\(Int(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000)ms")
+        guard e1 == .success, let appRaw = appEl else { return nil }
+        let app = unsafeDowncast(appRaw, to: AXUIElement.self)
+        var uiEl: CFTypeRef?
+        let e2 = AXUIElementCopyAttributeValue(app, kFocusedUI, &uiEl)
+        GlossLog.debug("ax diag focusedUI err=\(e2.rawValue)")
+        guard e2 == .success, let uiRaw = uiEl else { return nil }
+        let focused = unsafeDowncast(uiRaw, to: AXUIElement.self)
+        var selEl: CFTypeRef?
+        let e3 = AXUIElementCopyAttributeValue(focused, kSelectedText, &selEl)
+        GlossLog.debug("ax diag selectedText err=\(e3.rawValue)")
+        let selText = (e3 == .success) ? (selEl as? String) : nil
+        if let t = selText, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return CaptureResult(text: t, context: contextAround(focused), selectionBounds: selectionBounds(focused, primaryHeight: primaryHeight), origin: .hotkeyAX)
         }
         if let (el, text) = searchSelection(root: focused, deadline: deadline) {
@@ -32,12 +46,6 @@ enum AXTextFetcher {
     }
 
     // MARK: - 基础读取
-
-    private static func copyElement(_ el: AXUIElement, _ attr: CFString) -> AXUIElement? {
-        var v: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(el, attr, &v) == .success, let raw = v else { return nil }
-        return unsafeDowncast(raw, to: AXUIElement.self)
-    }
 
     private static func copyString(_ el: AXUIElement, _ attr: CFString) -> String? {
         var v: CFTypeRef?

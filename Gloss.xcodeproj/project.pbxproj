@@ -183,7 +183,7 @@
 		8A00000000000000000000E2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_IDENTITY = "GlossDev";
+				CODE_SIGN_IDENTITY = "Apple Development: yujundqq@icloud.com (2ZB8Z6VPSS)";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -204,7 +204,7 @@
 		8A00000000000000000000E3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_IDENTITY = "GlossDev";
+				CODE_SIGN_IDENTITY = "Apple Development: yujundqq@icloud.com (2ZB8Z6VPSS)";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
