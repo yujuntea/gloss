@@ -134,9 +134,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if args.contains("-seed-history") { DataStore.seedDemoHistory() }
         // 注意:此分支必须保持在下方所有带 return 的 demo 分支之前,否则会被提前 return 截断
         if args.contains("-check-updates") {
-            // 验收/调试钩子:启动 1 秒后触发一次更新检查(等 Sparkle updater 完成内部初始化)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                self?.updaterController.checkForUpdates(nil)
+            // 验收/调试钩子:updater 异步启动完成前 checkForUpdates 是静默 no-op
+            // (SPUUpdater 校验 _startedUpdater 直接 return),轮询 canCheckForUpdates 就绪后再触发,上限 30s
+            Task { @MainActor [weak self] in
+                for _ in 0..<60 {
+                    guard let self else { return }
+                    if self.updaterController.updater.canCheckForUpdates {
+                        self.updaterController.checkForUpdates(nil)
+                        return
+                    }
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                }
             }
         }
         if args.contains("-onboarding") { WindowManager.shared.showOnboarding(); return }
