@@ -102,7 +102,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installHotkeys()
     }
 
-    @objc private func openSettings() { WindowManager.shared.showSettings() }
+    // 非 private：MainMenu 的「设置…」项要用 #selector 引用它
+    @objc func openSettings() { WindowManager.shared.showSettings() }
     @objc private func openHistory() { WindowManager.shared.showHistory() }
     @objc private func openReleasesPage() { NSWorkspace.shared.open(releasesPageURL) }
 
