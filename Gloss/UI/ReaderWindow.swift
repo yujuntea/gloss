@@ -197,8 +197,9 @@ struct ReaderView: View {
     @ObservedObject private var vm: ReaderViewModel
     @State private var tab = 0
 
-    init(text: String, externalVM: ReaderViewModel? = nil) {
-        _vm = ObservedObject(wrappedValue: externalVM ?? ReaderViewModel(text: text))
+    // VM 必须由外部注入：任务启动归 WindowManager，视图自己不再造 VM（免得造出一个永不启动的空窗口）
+    init(vm: ReaderViewModel) {
+        _vm = ObservedObject(wrappedValue: vm)
     }
 
     var body: some View {
@@ -245,8 +246,9 @@ struct ReaderView: View {
             .frame(minWidth: 500)
         }
         .frame(minWidth: 980, minHeight: 620)
-        .onAppear { vm.start() }
-        .onDisappear { vm.cancel() } // 关窗/替换内容都取消跑批（K3-P1-2；cancel 幂等，替换路径重复调用无害）
+        // 只负责「换内容」路径：旧视图消失即取消它自己那个 VM（cancel 幂等，与 showReader 的显式取消重复调用无害）。
+        // 关窗不会触发 onDisappear（实测），关窗取消在 WindowManager.windowWillClose。
+        .onDisappear { vm.cancel() }
     }
 
     @ViewBuilder

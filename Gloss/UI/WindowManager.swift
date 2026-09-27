@@ -2,14 +2,13 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class WindowManager {
+final class WindowManager: NSObject, NSWindowDelegate {
     static let shared = WindowManager()
 
     private var settingsWindow: NSWindow?
     private var historyWindow: NSWindow?
     private var onboardingWindow: NSWindow?
     private var readerWindow: NSWindow?
-    private var readerHosting: NSHostingView<ReaderView>?
     private var currentReaderVM: ReaderViewModel? // 旧精读任务的生命周期锚点
 
     private func activate() {
@@ -51,18 +50,23 @@ final class WindowManager {
         currentReaderVM = nil
         let w = readerWindow ?? makeWindow(title: "Gloss 精读", size: NSSize(width: 1100, height: 720))
         readerWindow = w
+        w.delegate = self
         let vm = ReaderViewModel(text: text)
         currentReaderVM = vm
-        let view = ReaderView(text: text, externalVM: vm)
-        if let hv = readerHosting {
-            hv.rootView = view
-        } else {
-            let hv = NSHostingView(rootView: view)
-            readerHosting = hv
-            w.contentView = hv
-        }
+        // 每次都装全新 NSHostingView，不能复用后换 rootView：往已有 hosting view 上赋值 rootView
+        // 不会触发 onAppear/onDisappear（实测静默跳过），视图里的 @State 选中的 tab 还会跨内容残留
+        w.contentView = NSHostingView(rootView: ReaderView(vm: vm))
         w.makeKeyAndOrderFront(nil)
+        vm.start() // 显式启动：任务归 WindowManager 所有，不依赖视图生命周期回调
         GlossLog.info("reader opened chars=\(text.count)")
+    }
+
+    /// 关窗必须走这里取消跑批：实测关窗/最小化不触发 onDisappear（视图仍在窗层级里），
+    /// 只靠 ReaderView 的 onDisappear 会让任务在关窗后继续发请求写缓存。
+    func windowWillClose(_ notification: Notification) {
+        guard let w = notification.object as? NSWindow, w === readerWindow else { return }
+        currentReaderVM?.cancel()
+        currentReaderVM = nil
     }
 
     private func makeWindow(title: String, size: NSSize) -> NSWindow {

@@ -169,6 +169,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             WindowManager.shared.showReader(text: value("-demo-reader") ?? DemoSupport.readerText)
             return
         }
+        if args.contains("-demo-reader-twice") {
+            // 同会话连续两次开精读（复用 hosting view 换 rootView 致 onAppear 静默不触发——回归验证）
+            let t = value("-demo-reader-twice") ?? DemoSupport.readerText
+            WindowManager.shared.showReader(text: t)
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                WindowManager.shared.showReader(text: t + " Second open in the same session.")
+            }
+            return
+        }
     }
 }
 
