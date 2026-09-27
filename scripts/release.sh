@@ -113,15 +113,24 @@ RELEASES_URL="https://github.com/$REPO_SLUG/releases/tag/v$VERSION"
 MIN_MACOS="$(/usr/libexec/PlistBuddy -c 'Print LSMinimumSystemVersion' "$SRC_APP/Contents/Info.plist")"
 PUB_DATE="$(LC_ALL=C date -u +"%a, %d %b %Y %H:%M:%S %z")"
 
-# release notes: dist/notes-v<版本>.md 存在则转 CDATA 内嵌（XML 转义 + 换行转 <br/>），否则只留发布页链接
+# release notes: dist/notes-v<版本>.md 存在则转 CDATA 内嵌（去 markdown 标记 + XML 转义 + 换行转 <br/>），
+# 否则只留发布页链接。appcast 描述由 Sparkle 以纯文本/简单 HTML 渲染，不解析 markdown——
+# 原文里的 # 与 ** 会原样显示，故此处剥掉。
 NOTES_FILE="$DIST_DIR/notes-v$VERSION.md"
 NOTES_HTML=""
 if [ -f "$NOTES_FILE" ]; then
   NOTES_HTML="$(python3 -c '
-import html, sys
+import html, re, sys
 with open(sys.argv[1], encoding="utf-8") as f:
     text = f.read()
-print(html.escape(text).replace("\n", "<br/>\n"))
+lines = []
+for line in text.splitlines():
+    line = re.sub(r"^#{1,6}\s*", "", line)          # 标题标记
+    line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)   # 粗体
+    line = re.sub(r"^\s*[-*]\s+", "• ", line)      # 列表符号
+    line = re.sub(r"`([^`]+)`", r"\1", line)       # 行内代码
+    lines.append(line)
+print(html.escape("\n".join(lines)).replace("\n", "<br/>\n"))
 ' "$NOTES_FILE")"
 else
   NOTES_HTML="变更详情见 <a href=\"$RELEASES_URL\">GitHub Releases</a>"
