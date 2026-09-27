@@ -30,7 +30,7 @@
 
 从 [Releases](../../releases) 下载最新的 `Gloss-vX.Y.Z.zip`，解压得到 `Gloss.app`。
 
-**自动更新**：v0.1.3 起 App 内置更新检查（基于 [Sparkle](https://sparkle-project.org)，更新包经 EdDSA 签名校验）。菜单栏图标 → 「检查更新…」手动检查；第二次启动会询问是否允许后台定期检查，允许后自动发现新版本弹出更新说明，点击即可下载安装并重启，无需再手动下载。
+**自动更新**：v0.1.3 起 App 内置更新检查（基于 [Sparkle](https://sparkle-project.org)，更新包经 EdDSA 签名校验）。两个检查入口：**菜单栏图标 →「检查更新…」** 与 **设置 → 高级 →「检查更新…」**（高级页同时显示当前版本号、上次检查时间与自动检查开关，v0.1.4 起提供）。第二次启动会询问是否允许后台定期检查，允许后自动发现新版本弹出更新说明，点击即可下载安装并重启，无需再手动下载。
 
 > v0.1.2 及更早版本无内置更新，请手动下载 v0.1.3 一次，之后即可自动更新。
 
@@ -81,7 +81,8 @@ open Gloss.xcodeproj   # Xcode 16+，直接 Cmd+R 运行
 - 系统框架为主（AppKit / SwiftUI / SwiftData / PDFKit / AVFoundation / Carbon / Vision-free），唯一第三方依赖为 [Sparkle](https://github.com/sparkle-project/Sparkle) 2.10+（更新框架，SPM 拉取）
 - 逻辑自检：`SelfCheck/main.swift` 与核心纯逻辑文件联合编译即可运行（路由/SSE/分节提取/缓存键/图像管线共 65 项断言）
 - 签名：使用 Xcode 自动签名或本地自签证书均可；功能不依赖特定签名。**注意**：自动更新链锚定发布方的 EdDSA 密钥对——自编译版本会正常接受官方更新包并覆盖本地产物，请按需忽略更新提示或从 Releases 手动安装；发布方更换/丢失 EdDSA 私钥才会使老用户的自动更新断链
-- 规范打包发布：`scripts/release.sh` 一条命令完成 Release 构建 → 签名验证 → ditto 打 zip → 生成 Sparkle 更新描述（`dist/appcast.xml`，`sign_update` EdDSA 签名）；加 `--publish` 再创建 GitHub Release 并上传 zip 与 appcast，App 端即收到更新提醒
+- 规范打包发布：`scripts/release.sh` 一条命令完成 Release 构建 → 签名验证 → ditto 打 zip → 生成 Sparkle 更新描述（`dist/appcast.xml`，`sign_update` EdDSA 签名，自动剥离 markdown 标记）；加 `--publish` 再创建 GitHub Release 并上传 zip 与 appcast，App 端即收到更新提醒
+- 发版流程：版本号唯一来源是 pbxproj 的 `MARKETING_VERSION` 与 `CURRENT_PROJECT_VERSION`（Info.plist 经 `$(VAR)` 注入），两者**同步递增**后跑 `--publish` 即可；脚本内置三道发布闸——工作区须干净且已推送、build 号须大于线上 latest、重复发布拦截
 - 更新签名密钥：`generate_keys` 生成的 EdDSA 私钥保存在登录钥匙串，**务必另存备份**（`generate_keys -x <文件>`）；私钥丢失后无法再向老用户推送自动更新
 
 ## 技术要点
@@ -90,6 +91,7 @@ open Gloss.xcodeproj   # Xcode 16+，直接 Cmd+R 运行
 - **SSE 流式**：逐字节分行保留空行（`URLSession.bytes.lines` 会吞 SSE 事件分隔符——实测踩坑），支持 `reasoning_content` 与内联 `<think>` 两种思考形态，429/5xx 指数退避重试
 - **多模态**：截图按长边 1568px 压缩为 JPEG 后以 `image_url` dataURL 发送
 - **缓存**：键 = sha256(归一化输入 | 类型 | 参数 | 模型 | Prompt 版本)，LRU + SwiftData 持久化；截图点词查询的坐标量化到 1% 网格参与键计算
+- **自动更新**：Sparkle 2 + GitHub Releases 静态 appcast（`releases/latest/download/appcast.xml`，GitHub 固定 302 到最新 Release 资产，**零自建后端**）；更新包经 EdDSA 签名校验（公钥内置于 Info.plist，私钥在发布方钥匙串）；菜单栏与设置页共用同一个 updater 实例（`UpdaterCenter`）
 - **浮窗**：nonactivating NSPanel，不抢键盘焦点，全屏/多屏可用；ESC 为消费式全局热键随面板显隐装拆
 
 ## 文档

@@ -1,6 +1,6 @@
 # Gloss 技术实现文档
 
-> 版本：V1.0（2026-09-26）。权威范围见 [DESIGN.md](DESIGN.md) 文档索引；交互规格以 [product-design.md](product-design.md) 为准，本文不重复。
+> 版本：V1.1（2026-09-27）。权威范围见 [DESIGN.md](DESIGN.md) 文档索引；交互规格以 [product-design.md](product-design.md) 为准，本文不重复。
 > 外部接口事实（MiniMax 端点/模型 ID、系统权限实际行为、Services 注册细节）凡标注"实现期校准"处，须在 M1-T1/T2 联调时实测确认并回填本文。
 
 ## 1. 架构总览
@@ -31,7 +31,7 @@
 |---|---|---|
 | 系统/语言 | macOS 14+ / Swift 5.10+ | 本机 15.6；SwiftData 需 14。菜单栏用 NSStatusItem 自定义视图（弃 MenuBarExtra——后者不支持图标拖放，M2 拖拽 PDF 需要；菜单用原生 NSMenu 搭建。注：statusItem.view 自 10.14 标记废弃，自签自用可用，拖放承接验证列入 M2 开工项） |
 | UI 框架 | SwiftUI + AppKit 混合 | SwiftUI 快速搭建卡片/设置；NSPanel/Services/PDFView 需 AppKit |
-| 第三方依赖 | 仅 `swift-markdown-ui`（SPM） | 流式 Markdown 渲染；其余全用系统框架（AVFoundation/PDFKit/Carbon） |
+| 第三方依赖 | [Sparkle](https://github.com/sparkle-project/Sparkle) 2.10+（SPM，v0.1.3 引入） | App 内自动更新：静态 appcast + EdDSA 验签 + 原地替换安装；其余全用系统框架（AVFoundation/PDFKit/Carbon），Markdown 渲染为自研 `UI/MarkdownView`（未引入 swift-markdown-ui） |
 | 沙盒 | 关闭（D4 自签） | Services 的 NSPortName、⌘C 兜底、子进程截图在非沙盒下实现最简 |
 | App 形态 | LSUIElement=YES（无 Dock 图标） | 菜单栏常驻工具型 App 惯例；设置/精读窗用 NSApp.activate 拉起 |
 
@@ -41,12 +41,13 @@
 gloss/
 ├── Gloss.xcodeproj                # 提交工程文件（不使用 xcodegen）
 ├── docs/                          # 本文档集
+├── scripts/release.sh             # 规范构建 + EdDSA 签名 + appcast 生成 + GitHub 发布
+├── SelfCheck/main.swift           # 逻辑自检入口（swiftc 联合编译，见 §10）
 ├── Gloss/
 │   ├── GlossApp.swift             # @main；AppDelegate 注入（Services/生命周期）
 │   ├── App/
-│   │   ├── AppDelegate.swift      # servicesProvider 注册、启动自检
-│   │   ├── AppState.swift         # @Observable 单例：会话、配置、权限快照
-│   │   ├── Onboarding/            # 4 步向导 + 权限引导视图
+│   │   ├── AppDelegate.swift      # 菜单栏/热键/生命周期/菜单栏「检查更新…」项
+│   │   ├── OnboardingView.swift   # 4 步向导 + 权限引导视图
 │   │   └── PermissionCenter.swift # AX/屏幕录制 检测+引导+复检
 │   ├── Capture/
 │   │   ├── TextFetching.swift     # protocol：fetch() async -> CaptureResult
@@ -61,25 +62,30 @@ gloss/
 │   │   ├── LLMClient.swift        # OpenAI 兼容 SSE + 多模态
 │   │   ├── SSEParser.swift        # data: 行解析（独立可测）
 │   │   ├── PromptLibrary.swift    # 5 套模板 + PROMPT_VERSION
+│   │   ├── SectionExtractor.swift # 精读文本分节（独立可测）
 │   │   ├── ImagePipeline.swift    # 缩放/JPEG 压缩（截图 1568 / PDF 页 2200 长边上限）
 │   │   ├── TTSEngine.swift        # AVSpeechSynthesizer 封装
 │   │   ├── CacheStore.swift       # 响应缓存
 │   │   ├── KeychainStore.swift    # API Key 存取
-│   │   └── SettingsStore.swift    # UserDefaults + LLMConfig 管理
+│   │   ├── SettingsStore.swift    # UserDefaults + LLMConfig 管理
+│   │   ├── ProviderPresets.swift  # 内置厂商预设（代码内常量）
+│   │   ├── GlossLog.swift         # 统一日志
+│   │   └── UpdaterCenter.swift    # Sparkle 更新单例：版本号/检查/自动检查开关（v0.1.3）
 │   ├── UI/
+│   │   ├── WindowManager.swift    # 设置/精读/历史/向导 窗口编排
 │   │   ├── PanelController.swift  # NSPanel 生命周期/定位/事件监听
 │   │   ├── ResultPanelView.swift  # 浮窗根视图（顶栏/卡片区/操作条）
-│   │   ├── Cards/                 # WordCard/SentenceCard/ParagraphCard/ScreenshotCard
+│   │   ├── CardViews.swift        # WordCard/SentenceCard/ParagraphCard/ScreenshotCard
+│   │   ├── MarkdownView.swift     # 自研流式 Markdown 渲染
 │   │   ├── ReaderWindow.swift     # 精读窗（文本模式 M1 / PDF 模式 M2）
-│   │   ├── SettingsWindow.swift   # 四页签
+│   │   ├── SettingsWindow.swift   # 四页签（高级页含版本与更新区块，v0.1.4）
 │   │   └── HistoryWindow.swift
-│   ├── Storage/
-│   │   ├── GlossModels.swift      # SwiftData @Model
-│   │   └── DataStore.swift        # ModelContainer/Context 管理
-│   └── Resources/
-│       └── ProviderPresets.json   # 内置厂商预设
-├── GlossTests/                    # 单元测试（§10）
-└── Info.plist                     # NSServices/LSUIElement 等键
+│   └── Storage/
+│       ├── GlossModels.swift      # SwiftData @Model
+│       └── DataStore.swift        # ModelContainer/Context 管理
+├── scripts/                       # release.sh
+├── dist/                          # 产物（zip/appcast/notes，不入库）
+└── Info.plist                     # NSServices/LSUIElement/SU* 更新键等
 ```
 
 ## 3. 核心数据流
@@ -147,7 +153,7 @@ enum StreamEvent { case reasoningDelta(String); case contentDelta(String); case 
 - 超时：流式空闲（20s 无任何 delta）取消并抛 `timeout`；连接超时与流空闲共用 20s 口径（URLSession 单配置无法分离连接级 10s，原"连接 10s"设计经 K3 终审回填为本口径）。
 - 重试：仅对 429/5xx 自动重试 2 次（1s/3s 指数退避），流已产出内容后不重试（避免重复渲染）。
 - 错误域：`noAPIKey / network(URLError) / http(status, body) / parse / timeout / cancelled`。
-- Provider 预设（`ProviderPresets.json`，内置随包）：MiniMax（区域单选：国内 `https://api.minimax.chat` / 国际 `https://api.minimaxi.com`，chat 路径与默认模型 MiniMax-M3 的准确取值**实现期校准**——以 MiniMax 官方 API 文档为准回填）；OpenAI / DeepSeek / 智谱 GLM / Kimi / 自定义（任意 baseURL+path+model）。预设只填默认值，用户可改。
+- Provider 预设（`Core/ProviderPresets.swift`，代码内常量而非资源文件）：MiniMax（区域单选：国内 `https://api.minimax.chat` / 国际 `https://api.minimaxi.com`，chat 路径与默认模型 MiniMax-M3 的准确取值**实现期校准**——以 MiniMax 官方 API 文档为准回填）；OpenAI / DeepSeek / 智谱 GLM / Kimi / 自定义（任意 baseURL+path+model）。预设只填默认值，用户可改。
 
 ### 4.3 PromptLibrary（全文，PROMPT_VERSION = "m1"）
 
@@ -262,7 +268,16 @@ Carbon `RegisterEventHotKey`（⌥D=`kVK_ANSI_D`+optionKey，⌥S=`kVK_ANSI_S`+o
 
 - 辅助功能：`AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt: false])` 自检 + 引导窗（含"打开系统设置锚点" `AXPrivacy` / `Applications`）+「重新检测」。
 - 屏幕录制：无直接 API——用 `CGDisplayStream` 短时试探（能开帧=已授权）判定；未授权仅禁用通道 C 并引导。**实现期校准**。
-- 自签重签后 TCC 失效：每次启动自检两权限并在缺失且对应通道开启时菜单栏图标加红点提示。
+- 权限失效处理：每次启动自检两权限，状态写入菜单栏（`PermissionCenter.summaryLine()` 文本行；图标红点未实现）。**注意**：现行 Apple Development 证书（§11）跨构建稳定，重签不再导致 TCC 授权丢失——早期"自签重签后权限失效"的前提已不成立。
+
+### 4.11 UpdaterCenter（自动更新，v0.1.3）
+
+- **单例约束**：菜单栏「检查更新…」与设置页「高级 → 检查更新…」共用同一个 `SPUStandardUpdaterController`（`UpdaterCenter.controller`）。多实例会让各自的检查周期与驱动状态分叉，故控制器必须全局唯一。首次访问发生在 `setupStatusItem`（启动链内），满足 Sparkle「app 基本初始化后再启动 updater」的要求。
+- **两个检查入口**：菜单项 target 指向控制器本身（`#selector(SPUStandardUpdaterController.checkForUpdates(_:))`，借其自带菜单校验实现不可用时自动置灰）；设置页按钮走 `UpdaterCenter.checkForUpdates()`。
+- **`checkForUpdates` 在 updater 异步启动完成前是静默 no-op**（`SPUUpdater` 校验 `_startedUpdater` 后直接 return，既不检查也不报错）——验收钩子 `-check-updates` 因此轮询 `canCheckForUpdates` 就绪后再触发（`checkWhenReady`，上限 30s），固定延迟在慢网络下会静默失效。
+- **状态回显**：Sparkle 的 `automaticallyChecksForUpdates` / `lastUpdateCheckDate` 是 ObjC 属性，SwiftUI 不自动观察 KVO；设置页须在 `onAppear` 与低频定时器中主动同步，否则开关与时间戳会停留在窗口创建那一刻的旧值（实测：权限询问框点了「自动检查」，UI 仍显示未勾选）。
+- **Info.plist**：`SUFeedURL` = `$(SPARKLE_FEED_URL)`（仅 Release 配置注入，Debug 不设 → 更新功能自然禁用，避免开发中误把 Debug 实例替换成 Release 包）、`SUPublicEDKey`（EdDSA 公钥）。刻意不设 `SUAllowsAutomaticUpdates`（Sparkle 缺省跟随自动检查开关，官方亦不建议显式设置）。
+- **更新通道**：静态 appcast `releases/latest/download/appcast.xml`（GitHub 固定 302 到最新 Release 资产，零自建后端；走静态文件而非 REST API，无未认证限流）。已知限制：国内访问 GitHub 不稳，检查失败静默、菜单栏另设「前往下载页…」兜底；GitHub `/releases/latest/` 重定向有 2~3 分钟 CDN 传播延迟，传播期内旧版客户端会看到"已是最新"。
 
 ## 5. 数据模型（SwiftData，schema v1）
 
@@ -301,7 +316,7 @@ ChatMessage.images 非空时 content 组数组（text part 永远在前——先
 
 ## 7. 会话与并发（SessionCoordinator）
 
-`QuerySession { id, input, kind, state: streaming/done/error/cancelled, content: String, usedCache: Bool }`。规则：新查询 → cancel 旧 session 的 URLSessionTask 与 TTS；防抖 150ms（同文本重复触发合并）；所有 UI 更新经 @Observable AppState 主线程发布。长任务（全文精读）在独立 window 的 session 中运行，不与浮窗互斥。**面板内导航栈**：句/段/图卡内的子查询（难词词条、图上点词）入栈产生新卡，「← 返回」弹栈——切卡只换面板内容，不重触发捕获层；栈深 ≤2。
+`QuerySession { id, input, kind, state: streaming/done/error/cancelled, content: String, usedCache: Bool }`。规则：新查询 → cancel 旧 session 的 URLSessionTask 与 TTS；防抖 150ms（同文本重复触发合并）；所有 UI 更新经主线程发布（实现为 `ObservableObject` + `@Published`，无独立 AppState 单例）。长任务（全文精读）在独立 window 的 session 中运行，不与浮窗互斥。**面板内导航栈**：句/段/图卡内的子查询（难词词条、图上点词）入栈产生新卡，「← 返回」弹栈——切卡只换面板内容，不重触发捕获层；栈深 ≤2。
 
 ## 8. 性能预算
 
@@ -322,22 +337,30 @@ ChatMessage.images 非空时 content 组数组（text part 永远在前——先
 
 ## 10. 测试策略
 
-**单元（GlossTests）**
-- QueryRouter：表驱动 ≥16 例（≤3 词/连字符词/带撇词/句末标点/60 词边界/400 词边界/CJK 占比/空输入/纯数字）；
-- SSEParser：fixture 流（普通 delta、reasoning_content、`[DONE]`、chunk 中途截断的 `data:` 行拼接、多 choice 取 [0]）；
-- PromptLibrary：模板渲染快照测试（变量注入与 PROMPT_VERSION 锚定）；分节提取器：按固定粗体节名切类型化块的边界测试（节缺失/空节/流式半节，对应 §4.3 取数契约）；
-- CacheStore：键稳定性（同输入同键、改 prompt 版本换键）、LRU 清理；
-- LLMClient：URLProtocol mock（200 流式、401、429→重试 2 次、超时取消）；
-- ImagePipeline：同一输入两次 normalize 字节级一致的确定性测试（图像 sha256 入缓存键的前提）。
+**单元（SelfCheck，无 XCTest 目标）**
+工程内不存在 `GlossTests` target：单元自检以 `SelfCheck/main.swift` 与纯逻辑文件联合编译运行替代（三阶段评审已声明该偏差）。编译命令（文件清单需显式给出，勿通配 `Core/`——`UpdaterCenter.swift` 依赖 Sparkle 不属纯逻辑）：
+
+```bash
+swiftc -O -o /tmp/selfcheck \
+  Gloss/Core/QueryRouter.swift Gloss/Core/SSEParser.swift Gloss/Core/SectionExtractor.swift \
+  Gloss/Core/PromptLibrary.swift Gloss/Core/LLMClient.swift Gloss/Core/CacheStore.swift \
+  Gloss/Core/ImagePipeline.swift Gloss/Core/GlossLog.swift SelfCheck/main.swift && /tmp/selfcheck
+```
+
+当前 **65 项断言全绿**（2026-09-27 实测）。覆盖：QueryRouter 表驱动（≤3 词/连字符词/带撇词/句末标点/60 词边界/400 词边界/CJK 占比/空输入/纯数字）；SSEParser fixture 流（普通 delta、reasoning_content、`[DONE]`、chunk 中途截断的 `data:` 行拼接、多 choice 取 [0]）；分节提取器边界（节缺失/空节/流式半节）；PromptLibrary 模板渲染；CacheStore 键稳定性与 LRU；ImagePipeline 归一化字节级确定性。
+未覆盖（需手工/集成验证）：LLMClient 的 HTTP 行为（200 流式/401/429 重试/超时取消）尚无 URLProtocol mock；更新链路以「本地 feed E2E + 真实发布包升级演示」验证（见 §4.11）。
+
 **手工验收矩阵（M1 发布前）**：通道（服务/⌥D/⌥S）× 目标 App（Safari、Chrome、微信、Preview 文本型 PDF、Terminal、VS Code）× 预期（取词成功或降级提示正确）；权限三态（未授权/授权后/重签后失效）；ESC/外点/固定；缓存徽标与重查。
 
-## 11. 构建与自签（D4）
+## 11. 构建与签名（D4，2026-09-27 校准）
 
-1. Xcode 16+ 新建 macOS App（Interface=SwiftUI），勾选提交 .xcodeproj；Signing & Capabilities → Team=个人免费 Team，自动签名；App Sandbox **不勾选**。
-2. Info.plist：`LSUIElement=YES`；`NSServices`（§4.6）；`LSMinimumSystemVersion=14.0`。
-3. SPM 引入 `swift-markdown-ui`。
-4. 日常运行 = Xcode Run（本机自签）；证书 7 天到期：重新 Run 或 `xcodebuild -configuration Debug` 后运行——签名过期后**已运行实例可继续使用，但无法启动新实例**；重新签发后 TCC 权限可能重置（§4.10 启动自检兜底）。
-5. 首次运行后右键服务若未出现：注销重登或确认服务已勾选（§4.6）。
+1. **直接打开工程运行**：`open Gloss.xcodeproj`（Xcode 16+，Cmd+R）。工程已提交且签名配置就绪——`CODE_SIGN_STYLE=Manual` + `CODE_SIGN_IDENTITY="Apple Development: yujundqq@icloud.com (2ZB8Z6VPSS)"`（Team ID = `XB7CMSZH3F`，注意 CN 括号内的 `2ZB8Z6VPSS` 是 UID 而非 Team ID）；App Sandbox **不勾选**。
+2. **Info.plist 键**：`LSUIElement=YES`；`NSServices`（§4.6）；`LSMinimumSystemVersion=14.0`；`SUFeedURL`/`SUPublicEDKey`（§4.11）；版本号经 `$(MARKETING_VERSION)`/`$(CURRENT_PROJECT_VERSION)` 注入，**不在 plist 里写字面量**。
+3. **SPM 依赖**：`Sparkle`（upToNextMajor 2.10.0），版本由 `project.xcworkspace/xcshareddata/swiftpm/Package.resolved` 锁定并入库，保证可复现构建。
+4. **规范构建/发布**：`scripts/release.sh`（Release 构建 → 证书链硬校验 → Sparkle 配置防呆 → ditto 打 zip → `sign_update` EdDSA 签名 → 生成 `dist/appcast.xml`）；`scripts/release.sh --publish` 追加创建 GitHub Release 并上传 zip + appcast。发版只需在 pbxproj 同步递增两个版本旋钮。产物：`build/Gloss.app`（本机安装）、`dist/Gloss-vX.Y.Z.zip`、`dist/appcast.xml`。
+5. **证书有效期与权限**：Apple Development 证书有效期至 **2027-09-26**（年度续签，非早期免费 Team 的 7 天 profile）。实证：同一证书跨多次重建稳定，**TCC（辅助功能/屏幕录制）授权不随重建丢失**——更新包沿用同一证书签名，升级后授权保持。更换 Apple 证书不影响 Sparkle 更新链（锚定的是 EdDSA 密钥对）。
+6. **未公证的既有负担**：未走 Apple 公证，Gatekeeper 首次拦截为预期行为，下载者需在「系统设置 → 隐私与安全性 → 仍要打开」放行一次。
+7. 首次运行后右键服务若未出现：注销重登或确认服务已勾选（§4.6）。
 
 ## 12. 里程碑任务拆解
 
