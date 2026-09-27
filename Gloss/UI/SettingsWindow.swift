@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var testing = false
     @State private var voices: [AVSpeechSynthesisVoice] = []
     @State private var launchAtLoginOn = false
+    @State private var autoCheckUpdates = false
+    @State private var lastCheckText = "尚未检查"
 
     var body: some View {
         TabView {
@@ -281,6 +283,9 @@ struct SettingsView: View {
             Toggle("记录查询历史", isOn: $settings.historyEnabled)
             Toggle("开机自启（登录时启动）", isOn: $launchAtLoginOn)
             Button("重跑首启向导") { WindowManager.shared.showOnboarding() }
+            Divider()
+            updateSection
+            Divider()
             Text("隐私说明：查询内容仅发送给你配置的模型服务商；API Key 仅保存在本机钥匙串；无遥测、无崩溃上报。")
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -296,5 +301,45 @@ struct SettingsView: View {
                 GlossLog.error("SMAppService toggle failed: \(error)")
             }
         }
+    }
+
+    // MARK: 版本与更新
+
+    private var updateSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("版本")
+                Spacer()
+                Text(UpdaterCenter.versionText)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            Toggle("自动检查更新（每天一次）", isOn: $autoCheckUpdates)
+            HStack {
+                Text("上次检查：\(lastCheckText)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("检查更新…") { UpdaterCenter.checkForUpdates() }
+                    .disabled(!UpdaterCenter.updater.canCheckForUpdates)
+            }
+        }
+        .padding(.vertical, 2)
+        .onAppear { refreshUpdateState() }
+        // Sparkle 检查完成后会更新 lastUpdateCheckDate/canCheckForUpdates，但这些是 ObjC 属性
+        // SwiftUI 不自动观察；页面可见期间低频同步一次，避免「上次检查」停在旧值
+        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
+            refreshUpdateState()
+        }
+        .onChange(of: autoCheckUpdates) { on in
+            UpdaterCenter.updater.automaticallyChecksForUpdates = on
+        }
+    }
+
+    /// Sparkle 状态在权限询问框/检查完成后会变化，SwiftUI 不自动观察 ObjC 属性，
+    /// 需在页面出现时主动同步，否则会显示打开窗口那一刻的陈旧值
+    private func refreshUpdateState() {
+        autoCheckUpdates = UpdaterCenter.updater.automaticallyChecksForUpdates
+        lastCheckText = UpdaterCenter.lastCheckText
     }
 }

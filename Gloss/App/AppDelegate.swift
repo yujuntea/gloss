@@ -6,11 +6,6 @@ import Sparkle
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let releasesPageURL = URL(string: "https://github.com/yujuntea/gloss/releases")!
-    // 首次访问发生在 setupStatusItem（applicationDidFinishLaunching 调用链内），
-    // 保证 Sparkle updater 在 app 基本初始化后才启动
-    private lazy var updaterController = SPUStandardUpdaterController(startingUpdater: true,
-                                                                      updaterDelegate: nil,
-                                                                      userDriverDelegate: nil)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -62,11 +57,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mHistory.target = self
         menu.addItem(mHistory)
         menu.addItem(.separator())
-        // 更新检查菜单项的目标是 Sparkle 控制器:它自带菜单校验,检查不可用时自动置灰
+        // 更新检查菜单项的目标是 Sparkle 控制器：它自带菜单校验，检查不可用时自动置灰
         let mCheckUpdates = NSMenuItem(title: "检查更新…",
                                        action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
                                        keyEquivalent: "")
-        mCheckUpdates.target = updaterController
+        mCheckUpdates.target = UpdaterCenter.controller
         menu.addItem(mCheckUpdates)
         let mReleasesPage = NSMenuItem(title: "前往下载页…", action: #selector(openReleasesPage), keyEquivalent: "")
         mReleasesPage.target = self
@@ -134,18 +129,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if args.contains("-seed-history") { DataStore.seedDemoHistory() }
         // 注意:此分支必须保持在下方所有带 return 的 demo 分支之前,否则会被提前 return 截断
         if args.contains("-check-updates") {
-            // 验收/调试钩子:updater 异步启动完成前 checkForUpdates 是静默 no-op
-            // (SPUUpdater 校验 _startedUpdater 直接 return),轮询 canCheckForUpdates 就绪后再触发,上限 30s
-            Task { @MainActor [weak self] in
-                for _ in 0..<60 {
-                    guard let self else { return }
-                    if self.updaterController.updater.canCheckForUpdates {
-                        self.updaterController.checkForUpdates(nil)
-                        return
-                    }
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                }
-            }
+            // 验收/调试钩子：等待 updater 就绪后触发一次检查
+            UpdaterCenter.checkWhenReady()
         }
         if args.contains("-onboarding") { WindowManager.shared.showOnboarding(); return }
         if args.contains("-settings") { WindowManager.shared.showSettings(); return }
