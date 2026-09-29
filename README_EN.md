@@ -10,6 +10,11 @@ English | [简体中文](README.md)
   <img src="docs/screenshots/word-card.png" width="420" alt="Word card">
 </p>
 
+<p align="center">
+  <b>🌐 <a href="https://wbkais95q5wg3.space.mcode.cn">Website · Lookup as you read</a></b><br>
+  <sub>Interactive feature demos · Real screenshots · Illustrated setup guide — the interactions you can't see above all work live on the site</sub>
+</p>
+
 ## Why
 
 Reading English documents today means switching to a dictionary site for unknown words, copy-pasting tricky sentences into a chatbot, and photographing on-screen text for a multimodal model — each 5+ steps that break your reading flow. Gloss collapses all of it into **one action**: select and press ⌥D, or frame a screen region with ⌥S.
@@ -29,6 +34,8 @@ Reading English documents today means switching to a dictionary site for unknown
 ## Download
 
 Grab the latest `Gloss-vX.Y.Z.zip` from [Releases](../../releases) and unzip to get `Gloss.app`.
+
+> Prefer not to read a terminal? The [website](https://wbkais95q5wg3.space.mcode.cn) has four hands-on interactive demos, the steps for clearing the Gatekeeper prompt on first launch, and a three-step setup walkthrough.
 
 **Auto-updates**: since v0.1.3 the app checks for updates via [Sparkle](https://sparkle-project.org) (update packages verified with an EdDSA signature). Two entry points: the menu bar icon → 「检查更新…」(Check for Updates), and Settings → 高级 → 「检查更新…」 (the Advanced tab also shows the current version, last check time, and an auto-check toggle; available since v0.1.4). On the second launch it asks whether to allow periodic background checks — once allowed, new versions pop a release-notes dialog with an in-app download + install + relaunch, no manual download needed.
 
