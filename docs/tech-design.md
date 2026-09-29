@@ -347,7 +347,7 @@ swiftc -O -o /tmp/selfcheck \
   Gloss/Core/ImagePipeline.swift Gloss/Core/GlossLog.swift SelfCheck/main.swift && /tmp/selfcheck
 ```
 
-当前 **65 项断言全绿**（2026-09-27 实测）。覆盖：QueryRouter 表驱动（≤3 词/连字符词/带撇词/句末标点/60 词边界/400 词边界/CJK 占比/空输入/纯数字）；SSEParser fixture 流（普通 delta、reasoning_content、`[DONE]`、chunk 中途截断的 `data:` 行拼接、多 choice 取 [0]）；分节提取器边界（节缺失/空节/流式半节）；PromptLibrary 模板渲染；CacheStore 键稳定性与 LRU；ImagePipeline 归一化字节级确定性。
+当前 **68 项断言全绿**（2026-09-29 实测）。覆盖：QueryRouter 表驱动（≤3 词/连字符词/带撇词/句末标点/60 词边界/400 词边界/CJK 占比/空输入/纯数字）；SSEParser fixture 流（普通 delta、reasoning_content、`[DONE]`、chunk 中途截断的 `data:` 行拼接、多 choice 取 [0]）；分节提取器边界（节缺失/空节/流式半节）；PromptLibrary 模板渲染；CacheStore 键稳定性与 LRU；ImagePipeline 归一化字节级确定性。
 未覆盖（需手工/集成验证）：LLMClient 的 HTTP 行为（200 流式/401/429 重试/超时取消）尚无 URLProtocol mock；更新链路以「本地 feed E2E + 真实发布包升级演示」验证（见 §4.11）。
 
 **手工验收矩阵（M1 发布前）**：通道（服务/⌥D/⌥S）× 目标 App（Safari、Chrome、微信、Preview 文本型 PDF、Terminal、VS Code）× 预期（取词成功或降级提示正确）；权限三态（未授权/授权后/重签后失效）；ESC/外点/固定；缓存徽标与重查。

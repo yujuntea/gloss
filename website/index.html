@@ -8,7 +8,9 @@
 <meta property="og:title" content="Gloss · 划词即释 — Mac 系统级英文阅读助手" />
 <meta property="og:description" content="选中即查、截图即问、长文精读。一个动作，不打断阅读心流。" />
 <meta property="og:type" content="website" />
-<meta property="og:url" content="https://github.com/yujuntea/gloss" />
+<meta property="og:url" content="https://wbkais95q5wg3.space.mcode.cn/" />
+<meta property="og:image" content="https://wbkais95q5wg3.space.mcode.cn/assets/og.jpg" />
+<meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230B0D10'/%3E%3Ctext x='16' y='23' font-family='-apple-system,sans-serif' font-size='19' font-weight='700' fill='%234FD1C5' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E" />
 
 <style>
@@ -24,7 +26,7 @@
   --line-2:rgba(255,255,255,.14);
   --ink:#EDEFF3;
   --ink-2:#A6AEBC;
-  --ink-3:#6B7382;
+  --ink-3:#7C8493;
   --teal:#4FD1C5;
   --teal-2:#2BB3A8;
   --violet:#A78BFA;
@@ -101,7 +103,7 @@ p{margin:0}
 .nav-links a:hover{color:#fff}
 .nav-cta{display:flex;gap:9px;align-items:center}
 @media(max-width:940px){.nav-links{display:none}}
-@media(max-width:560px){.nav-in{padding:14px 18px}.nav-cta .btn-ghost{display:none}}
+@media(max-width:560px){.nav-in{padding:14px 18px}.nav-cta .nav-cta-ghost{display:none}}
 
 /* ============================================================
    Buttons
@@ -161,7 +163,15 @@ section{position:relative}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .reader-body{padding:22px 24px 24px;font-size:.885rem;line-height:1.85;color:#C9D0DA;position:relative;min-height:430px;
   transition:opacity .3s,filter .3s}
-.reader-body.dim{opacity:.16;filter:blur(1.5px);pointer-events:none}
+.reader-body.dim{pointer-events:none}
+/* 按段落调暗：选中词所在段落保持可读（贴近真实 App 不变暗的行为），
+   钉住的 ⌥D 徽章也随之可见；卡片开着时其他词仍可直接点击切换 */
+.reader-body.dim > *{opacity:.16;filter:blur(1.5px)}
+.reader-body.dim p:has(.tok.sel){opacity:1;filter:none}
+.reader-body.dim .tok{pointer-events:auto}
+/* 调暗段落里的"幽灵词"可点但抑制 hover 高亮/徽章，避免明暗反差突兀 */
+.reader-body.dim p:not(:has(.tok.sel)) .tok:hover{background:transparent;color:inherit}
+.reader-body.dim p:not(:has(.tok.sel)) .tok:hover .kbd-tip{opacity:0}
 .reader-body h4{font-size:1.02rem;color:#fff;margin-bottom:9px}
 .reader-body p{margin-bottom:11px}
 .tok{cursor:pointer;border-radius:4px;padding:1px 2px;transition:background .16s,color .16s;position:relative;white-space:pre-wrap}
@@ -176,6 +186,11 @@ section{position:relative}
   background:var(--teal);color:#04201E;font-size:.63rem;font-weight:700;padding:2px 7px;border-radius:5px;
   opacity:0;pointer-events:none;transition:all .18s;white-space:nowrap;font-family:var(--mono)}
 .tok:hover .kbd-tip{opacity:1;transform:translateX(-50%) scale(1)}
+/* 单词级划词：点状下划线呼应"划线词"，选中后钉住 ⌥D 徽章（卡片翻到词上方时徽章换边） */
+.tok[data-t="w"]{text-decoration:underline dotted rgba(79,209,197,.45);text-decoration-thickness:1px;text-underline-offset:3px}
+.tok[data-t="w"].sel{text-decoration-color:transparent}
+.tok.pin-tip .kbd-tip{opacity:1;transform:translateX(-50%) scale(1)}
+.tok.pin-tip.flip-tip .kbd-tip{bottom:auto;top:calc(100% + 6px)}
 .reader-hint{position:absolute;right:16px;bottom:12px;font-size:.68rem;color:var(--ink-3);display:flex;align-items:center;gap:6px;
   transition:opacity .3s}
 .reader-body.dim ~ .reader-hint{opacity:0}
@@ -186,18 +201,25 @@ kbd{font-family:var(--mono);font-size:.72em;padding:2px 6px;border-radius:5px;ba
 .gloss-card{position:absolute;width:352px;border-radius:14px;background:rgba(20,23,30,.93);
   backdrop-filter:blur(26px) saturate(170%);-webkit-backdrop-filter:blur(26px) saturate(170%);
   border:1px solid var(--line-2);box-shadow:0 26px 62px rgba(0,0,0,.68),0 0 0 1px rgba(255,255,255,.04);
-  opacity:0;transform:translateY(10px) scale(.96);pointer-events:none;transition:all .34s cubic-bezier(.16,1,.3,1);z-index:20;overflow:hidden}
+  opacity:0;transform:translateY(10px) scale(.96);pointer-events:none;transition:all .34s cubic-bezier(.16,1,.3,1);z-index:20;overflow:visible}
+/* 圆角裁剪下沉到内层，卡片本体 overflow 可见——词锚定模式的指向箭头（::before 在盒外）才能渲染 */
+.card-in{overflow:hidden;border-radius:inherit}
 .gloss-card.show{opacity:1;transform:none;pointer-events:auto}
+/* 词锚定模式：收窄为真实 App 的 352px 浮窗，箭头指向选中的词 */
+.gloss-card.word-mode::before{content:"";position:absolute;top:-6.5px;left:var(--arrow-x,24px);width:12px;height:12px;
+  background:#141721;border-left:1.5px solid rgba(255,255,255,.22);border-top:1.5px solid rgba(255,255,255,.22);transform:rotate(45deg);border-top-left-radius:2.5px}
+.gloss-card.word-mode.flip::before{top:auto;bottom:-6.5px;transform:rotate(225deg)}
 .card-top{height:34px;display:flex;align-items:center;gap:10px;padding:0 9px 0 12px;border-bottom:1px solid var(--line)}
 .seg{display:flex;background:rgba(255,255,255,.055);border-radius:7px;padding:2px;gap:1px}
 .seg span{font-size:.72rem;padding:3px 11px;border-radius:5px;color:var(--ink-3);transition:all .25s;cursor:pointer;user-select:none}
 .seg span.on{background:rgba(255,255,255,.16);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.28)}
-.seg span:focus-visible,.tok:focus-visible,.chip:focus-visible,.rd-tab:focus-visible,.code-tag:focus-visible{
+.seg span:focus-visible,.tok:focus-visible,.chip:focus-visible,.rd-tab:focus-visible,.code-tag:focus-visible,
+.vocab-w:focus-visible,.shot:focus-visible{
   outline:2px solid var(--teal);outline-offset:2px;border-radius:5px}
 .card-tools{margin-left:auto;display:flex;gap:2px;color:var(--ink-3);align-items:center}
 .card-tools i{width:22px;height:22px;display:grid;place-items:center;border-radius:6px;font-style:normal;font-size:.78rem;transition:all .18s}
 .card-tools i:hover{background:rgba(255,255,255,.09);color:#fff}
-.card-body{padding:14px 16px;font-size:.83rem;line-height:1.62;color:#D6DBE3;max-height:348px;overflow:hidden;
+.card-body{padding:14px 16px;font-size:.83rem;line-height:1.62;color:#D6DBE3;max-height:348px;overflow-y:auto;
   -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 22px),transparent);
           mask-image:linear-gradient(180deg,#000 calc(100% - 22px),transparent)}
 .st-row{opacity:0;transform:translateY(5px);transition:all .42s cubic-bezier(.16,1,.3,1)}
@@ -682,6 +704,7 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
           <h4>Distributed Systems — Consensus</h4>
           <p>A distributed system is a collection of <span class="tok" data-t="w" data-w="coherent">coherent</span> nodes that must remain correct under partial failure. Every retry needs an <span class="tok" data-t="w" data-w="idempotent">idempotent</span> <span class="tok" data-t="w" data-w="operation">operation</span> to avoid double charging.</p>
           <p><span class="tok" data-t="s">When a quorum of replicas acknowledges a write, the value is considered committed, and any later read must observe that same value.</span></p>
+          <p>An ack is a promise: once the write reaches durable storage, no failover can take it back — that guarantee is what engineers mean by <span class="tok" data-t="w" data-w="durability">durability</span>.</p>
         </div>
         <div class="reader-hint">
           <span class="dot"></span> 点击划线词试一下
@@ -689,18 +712,24 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
 
         <!-- floating gloss card -->
         <div class="gloss-card" id="heroCard">
+          <div class="card-in">
           <div class="card-top">
             <div class="seg">
-              <span data-seg="w">词</span><span data-seg="s">句</span><span data-seg="p">段</span>
+              <span data-seg="w" role="button" tabindex="0" aria-label="按单词查询">词</span><span data-seg="s" role="button" tabindex="0" aria-label="按句子查询">句</span><span data-seg="p" role="button" tabindex="0" aria-label="按段落查询">段</span>
             </div>
             <div class="card-tools">
-              <i title="固定">📌</i><i title="设置">⚙️</i><i title="关闭" class="close-card">✕</i>
+              <i title="固定"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 17.5s-5.5-4.6-5.5-9a5.5 5.5 0 0 1 11 0c0 4.4-5.5 9-5.5 9z" stroke-linejoin="round"/><circle cx="10" cy="8.3" r="1.8"/></svg></i><i title="设置"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.4"/><path d="M10 3v2.2M10 14.8V17M3 10h2.2M14.8 10H17M5.2 5.2l1.5 1.5M13.3 13.3l1.5 1.5M14.8 5.2l-1.5 1.5M6.7 13.3l-1.5 1.5" stroke-linecap="round"/></svg></i><i title="关闭" class="close-card">✕</i>
             </div>
           </div>
           <div class="card-body" id="heroCardBody"></div>
           <div class="card-foot">
-            <div class="src"><span id="heroSrc">划词</span> 词查询</div>
-            <div class="foot-acts"><span>🔊</span><span>📋</span><span>⟲</span></div>
+            <div class="src"><span id="heroSrc">⌥D</span> <span id="heroKind">词查询</span></div>
+            <div class="foot-acts">
+              <span title="朗读"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 8v4h2.8L10 15.3V4.7L6.3 8H3.5z" stroke-linejoin="round"/><path d="M12.5 7.5a3.5 3.5 0 0 1 0 5" stroke-linecap="round"/></svg></span>
+              <span title="复制"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="7.5" y="7.5" width="9" height="9" rx="1.8"/><path d="M5 12.5h-.2A1.8 1.8 0 0 1 3 10.7V5.3A1.8 1.8 0 0 1 4.8 3.5h5.4a1.8 1.8 0 0 1 1.8 1.8V5.5" stroke-linecap="round"/></svg></span>
+              <span title="重新查询"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6l1.9 1.8" stroke-linecap="round"/><path d="M16.6 2.9v4.3h-4.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </div>
+          </div>
           </div>
         </div>
       </div>
@@ -806,6 +835,7 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
           <div class="rt-stats">
             <span class="rt-stat">词数 <b id="rtWords">1</b></span>
             <span class="rt-stat">句末标点 <b id="rtPunct">无</b></span>
+            <span class="rt-stat">句中标点 <b id="rtMid">无</b></span>
             <span class="rt-stat">字符 <b id="rtChars">10</b></span>
           </div>
         </div>
@@ -817,8 +847,8 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
           </div>
           <div class="rt-thresholds">
             <b style="color:var(--ink-2)">判定阈值</b><br>
-            ≤ 3 词且无句中标点 → 词卡<br>
-            带句末标点且 &lt; 60 词 → 句子卡<br>
+            ≤ 3 词且无句中/句末标点 → 词卡<br>
+            含句末标点且 &lt; 60 词 → 句子卡<br>
             其余 &lt; 400 词 → 段落卡<br>
             ≥ 400 词 → 精读窗
           </div>
@@ -920,10 +950,10 @@ The third property is partition tolerance. A network partition splits the cluste
             <p><strong>第三项性质是分区容错性</strong>（partition tolerance）。网络分区（network partition）会把集群分裂成若干无法彼此通信的子群。</p>
           </div>
           <div class="rd-pane" data-pane="1">
-            <div class="vocab-row"><span class="vocab-w">idempotent<br><span style="color:var(--ink-3);font-size:.9em">/ˌaɪdemˈpɪtənt/</span></span><span class="vocab-m">幂等的；执行一次与多次效果相同<code>"An operation is idempotent if performing it once has the same effect as performing it many times."</code></span></div>
-            <div class="vocab-row"><span class="vocab-w">partial failure<br><span style="color:var(--ink-3);font-size:.9em">/ˈpɑːrʃl/</span></span><span class="vocab-m">局部故障；系统中部分组件出错而整体仍继续运行<code>"some nodes may crash, some network links may drop messages"</code></span></div>
-            <div class="vocab-row"><span class="vocab-w">clock drift<br><span style="color:var(--ink-3);font-size:.9em">/drɪft/</span></span><span class="vocab-m">时钟漂移；不同机器上的时钟逐渐偏离真实时间<code>"clocks on different machines may drift apart"</code></span></div>
-            <div class="vocab-row"><span class="vocab-w">misbehave<br><span style="color:var(--ink-3);font-size:.9em">/ˌmɪsbɪˈheɪv/</span></span><span class="vocab-m">行为异常；不按预期方式运行<code>"even when individual components misbehave"</code></span></div>
+            <div class="vocab-row"><span class="vocab-w" data-w="idempotent" role="button" tabindex="0" aria-label="查词：idempotent">idempotent<br><span style="color:var(--ink-3);font-size:.9em">/ˌaɪdemˈpoʊtənt/</span></span><span class="vocab-m">幂等的；执行一次与多次效果相同<code>"An operation is idempotent if performing it once has the same effect as performing it many times."</code></span></div>
+            <div class="vocab-row"><span class="vocab-w" data-w="partial failure" role="button" tabindex="0" aria-label="查词：partial failure">partial failure<br><span style="color:var(--ink-3);font-size:.9em">/ˈpɑːrʃl ˈfeɪljər/</span></span><span class="vocab-m">局部故障；系统中部分组件出错而整体仍继续运行<code>"some nodes may crash, some network links may drop messages"</code></span></div>
+            <div class="vocab-row"><span class="vocab-w" data-w="clock drift" role="button" tabindex="0" aria-label="查词：clock drift">clock drift<br><span style="color:var(--ink-3);font-size:.9em">/klɑːk drɪft/</span></span><span class="vocab-m">时钟漂移；不同机器上的时钟逐渐偏离真实时间<code>"clocks on different machines may drift apart"</code></span></div>
+            <div class="vocab-row"><span class="vocab-w" data-w="misbehave" role="button" tabindex="0" aria-label="查词：misbehave">misbehave<br><span style="color:var(--ink-3);font-size:.9em">/ˌmɪsbɪˈheɪv/</span></span><span class="vocab-m">行为异常；不按预期方式运行<code>"even when individual components misbehave"</code></span></div>
           </div>
           <div class="rd-pane" data-pane="2">
             <div class="term-item"><b>idempotency</b><span class="domain">分布式系统</span><p>幂等性：同一请求执行一次与多次效果相同。靠幂等键（idempotency key）实现，是重试机制的安全前提。</p></div>
@@ -956,16 +986,16 @@ The third property is partition tolerance. A network partition splits the cluste
     </div>
 
     <div class="shots rv rv-d1">
-      <figure class="shot shot-hero" data-full="assets/shot-reading.png" data-cap="⌥S 截图即问：框选英文文档区域，读图翻译 + 术语解释">
-        <img src="assets/shot-reading.png" alt="⌥S 截图即问：框选英文文档区域，读图翻译与术语解释" loading="lazy" width="1800" height="1182" />
+      <figure class="shot shot-hero" data-full="assets/shot-reading.webp" data-cap="⌥S 截图即问：框选英文文档区域，读图翻译 + 术语解释">
+        <img src="assets/shot-reading.webp" alt="⌥S 截图即问：框选英文文档区域，读图翻译与术语解释" loading="lazy" width="1800" height="1182" />
         <figcaption class="shot-cap"><span class="k">⌥S</span><span><b>截图即问</b> · 框选屏幕任意区域，图表、截图、PDF 页面里的英文都能问；结果还能在缩略图上点词继续查</span></figcaption>
       </figure>
-      <figure class="shot" data-full="assets/word-card.png" data-cap="⌥D 划词即查：语境义置顶 + 美英音标 + 搭配 + 双语例句 + 词源辨析">
-        <img src="assets/word-card.png" alt="划词词卡：单词、美英音标、语境义、搭配、例句、辨析" loading="lazy" width="664" height="900" />
+      <figure class="shot" data-full="assets/word-card.webp" data-cap="⌥D 划词即查：语境义置顶 + 美英音标 + 搭配 + 双语例句 + 词源辨析">
+        <img src="assets/word-card.webp" alt="划词词卡：单词、美英音标、语境义、搭配、例句、辨析" loading="lazy" width="664" height="900" />
         <figcaption class="shot-cap"><span class="k">⌥D</span><span><b>划词即查</b> · 语境义置顶，不切窗口、不抢焦点</span></figcaption>
       </figure>
-      <figure class="shot" data-full="assets/reader.png" data-cap="长文精读窗：左原文，右「翻译 / 生词 / 术语 / 解读」四页签">
-        <img src="assets/reader.png" alt="长文精读窗：左侧英文原文，右侧翻译、生词、术语、解读四个页签" loading="lazy" width="1800" height="1224" />
+      <figure class="shot" data-full="assets/reader.webp" data-cap="长文精读窗：左原文，右「翻译 / 生词 / 术语 / 解读」四页签">
+        <img src="assets/reader.webp" alt="长文精读窗：左侧英文原文，右侧翻译、生词、术语、解读四个页签" loading="lazy" width="1800" height="1224" />
         <figcaption class="shot-cap"><span class="k">400+</span><span><b>长文精读</b> · 左原文右四页签，长文分批流式翻译</span></figcaption>
       </figure>
     </div>
@@ -980,15 +1010,15 @@ The third property is partition tolerance. A network partition splits the cluste
       <h2>围绕"不打断阅读"设计的每一处细节</h2>
     </div>
     <div class="f-grid">
-      <div class="f rv rv-d1"><div class="f-ico">🪟</div><h3>不抢焦点的浮窗</h3><p>nonactivating NSPanel，永不成为 key window——你在原文里继续敲字，浮窗照样显示。跨越全屏视频也能弹出。</p></div>
-      <div class="f rv rv-d2"><div class="f-ico">⚡</div><h3>唤起即出结果</h3><p>类型自动路由、SSE 逐块流式渲染、缓存命中即回显。按键到浮窗出现 &lt;0.2s，首字内容 &lt;1.5s。</p></div>
-      <div class="f rv rv-d3"><div class="f-ico">🗣</div><h3>离线朗读</h3><p>走系统 TTS，不额外花钱也不外传文本。美音 / 英音一键切换，词、整句、识别出的图上文本都能读，语速 0.5–1.5× 可调。</p></div>
-      <div class="f rv"><div class="f-ico">💾</div><h3>重复查询零成本</h3><p>缓存键 = sha256(归一化输入 | 类型 | 参数 | 模型 | Prompt 版本)，LRU + SwiftData 持久化。截图点词的坐标量化到 1% 网格后参与键计算。</p></div>
-      <div class="f rv rv-d1"><div class="f-ico">🕘</div><h3>历史可回放</h3><p>每次查询都留档，按类型分组，支持搜索与回放。截图条目仅回放不重查——原图不落盘，重查请重新 ⌥S。</p></div>
-      <div class="f rv rv-d2"><div class="f-ico">⬆️</div><h3>App 内自动更新</h3><p>Sparkle 2 + GitHub Releases 静态 appcast，零自建后端。更新包经 EdDSA 签名校验，点一下即下载安装并重启，权限不用重授。</p></div>
-      <div class="f rv rv-d3"><div class="f-ico">🔒</div><h3>隐私边界清楚</h3><p>API Key 只存本机钥匙串，日志 / 缓存 / 历史中不落明文。无遥测、无崩溃上报、无任何第三方数据收集。</p></div>
-      <div class="f rv"><div class="f-ico">🔀</div><h3>双通道取词兜底</h3><p>AX 优先（带选区 bounds 与上下文），失败自动降级模拟 ⌘C 读剪贴板并尽力恢复。两通道都失败才给降级提示，并引导改用 ⌥S。</p></div>
-      <div class="f rv rv-d1"><div class="f-ico">🛡</div><h3>错误说人话</h3><p>401 说"API Key 无效或已过期"，429 说"请求太频繁"，超时不自动重试（超时≠限流）。429/5xx 指数退避重试 2 次并注明。</p></div>
+      <div class="f rv rv-d1"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="3.5" width="15" height="13" rx="2.2"/><path d="M2.5 7.2h15"/><circle cx="5.1" cy="5.35" r=".6" fill="currentColor" stroke="none"/><circle cx="7.3" cy="5.35" r=".6" fill="currentColor" stroke="none"/><path d="M6.5 12.5h7" stroke-linecap="round"/></svg></div><h3>不抢焦点的浮窗</h3><p>nonactivating NSPanel，永不成为 key window——你在原文里继续敲字，浮窗照样显示。跨越全屏视频也能弹出。</p></div>
+      <div class="f rv rv-d2"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.8 2.2 5.2 11h3.9l-.9 6.8L13.9 9H10l.8-6.8z" stroke-linejoin="round"/></svg></div><h3>唤起即出结果</h3><p>类型自动路由、SSE 逐块流式渲染、缓存命中即回显。按键到浮窗出现 &lt;0.2s，首字内容 &lt;1.5s。</p></div>
+      <div class="f rv rv-d3"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 8v4h2.8L10 15.3V4.7L6.3 8H3.5z" stroke-linejoin="round"/><path d="M12.5 7.5a3.5 3.5 0 0 1 0 5M14.8 5.5a6.3 6.3 0 0 1 0 9" stroke-linecap="round"/></svg></div><h3>离线朗读</h3><p>走系统 TTS，不额外花钱也不外传文本。美音 / 英音一键切换，词、整句、识别出的图上文本都能读，语速 0.5–1.5× 可调。</p></div>
+      <div class="f rv"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="10" cy="4.8" rx="6.5" ry="2.3"/><path d="M3.5 4.8v10.4c0 1.27 2.9 2.3 6.5 2.3s6.5-1.03 6.5-2.3V4.8"/><path d="M3.5 10c0 1.27 2.9 2.3 6.5 2.3s6.5-1.03 6.5-2.3"/></svg></div><h3>重复查询零成本</h3><p>缓存键 = sha256(归一化输入 | 类型 | 参数 | 模型 | Prompt 版本)，LRU + SwiftData 持久化。截图点词的坐标量化到 1% 网格后参与键计算。</p></div>
+      <div class="f rv rv-d1"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16.8 10A6.8 6.8 0 1 1 14 4.4" stroke-linecap="round"/><path d="M14.6 2.2l-.4 2.9 2.9.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 6.5V10l2.5 1.5" stroke-linecap="round"/></svg></div><h3>历史可回放</h3><p>每次查询都留档，按类型分组，支持搜索与回放。截图条目仅回放不重查——原图不落盘，重查请重新 ⌥S。</p></div>
+      <div class="f rv rv-d2"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15.6 7.5A6 6 0 0 0 5.1 5.9L3.6 7.7"/><path d="M3.4 3.6l.2 4.1 4.1-.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.4 12.5a6 6 0 0 0 10.5 1.6l1.5-1.8"/><path d="M16.6 16.4l-.2-4.1-4.1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>App 内自动更新</h3><p>Sparkle 2 + GitHub Releases 静态 appcast，零自建后端。更新包经 EdDSA 签名校验，点一下即下载安装并重启，权限不用重授。</p></div>
+      <div class="f rv rv-d3"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4.5" y="8.5" width="11" height="8" rx="2"/><path d="M7 8.5V6.5a3 3 0 0 1 6 0v2"/><circle cx="10" cy="12.5" r=".9" fill="currentColor" stroke="none"/></svg></div><h3>隐私边界清楚</h3><p>API Key 只存本机钥匙串，日志 / 缓存 / 历史中不落明文。无遥测、无崩溃上报、无任何第三方数据收集。</p></div>
+      <div class="f rv"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h2.8c1.7 0 2.8.9 3.9 2.3C10.9 10 12 12 14.1 12h1.4" stroke-linecap="round"/><path d="M3 12h2.8c1.7 0 2.8-.9 3.9-2.3C10.9 8 12 6 14.1 6h1.4" stroke-linecap="round"/><path d="M13.6 3.9 15.7 6l-2.1 2.1M13.6 9.9l2.1 2.1-2.1 2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>双通道取词兜底</h3><p>AX 优先（带选区 bounds 与上下文），失败自动降级模拟 ⌘C 读剪贴板并尽力恢复。两通道都失败才给降级提示，并引导改用 ⌥S。</p></div>
+      <div class="f rv rv-d1"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16.5 5.8v6a2.3 2.3 0 0 1-2.3 2.3H8.5L5 17v-2.9a2.3 2.3 0 0 1-1.5-2.3v-6A2.3 2.3 0 0 1 5.8 3.5h8.4a2.3 2.3 0 0 1 2.3 2.3z" stroke-linejoin="round"/><path d="M7 7.5h6M7 10.2h3.8" stroke-linecap="round"/></svg></div><h3>错误说人话</h3><p>401 说"API Key 无效或已过期"，429 说"请求太频繁"，超时不自动重试（超时≠限流）。429/5xx 指数退避重试 2 次并注明。</p></div>
     </div>
   </div>
 </section>
@@ -1023,7 +1053,7 @@ The third property is partition tolerance. A network partition splits the cluste
       <div class="stat"><div class="stat-v grad-teal">2.0<span style="font-size:1rem">MB</span></div><div class="stat-l">安装包大小</div></div>
       <div class="stat"><div class="stat-v grad-teal">&lt;0.2<span style="font-size:1rem">s</span></div><div class="stat-l">按键 → 浮窗</div></div>
       <div class="stat"><div class="stat-v grad-teal">1</div><div class="stat-l">第三方依赖</div></div>
-      <div class="stat"><div class="stat-v grad-teal">65</div><div class="stat-l">项核心逻辑自检断言</div></div>
+      <div class="stat"><div class="stat-v grad-teal">68</div><div class="stat-l">项核心逻辑自检断言</div></div>
     </div>
   </div>
 </section>
@@ -1036,7 +1066,7 @@ The third property is partition tolerance. A network partition splits the cluste
         <div>
           <div class="ver-line">
             <span class="ver-pill" data-ver>v0.1.7</span>
-            <span class="ver-date">2026-09-29 · 本版本起支持 Intel Mac</span>
+            <span class="ver-date"><span data-verdate>2026-09-29</span> · 本版本起支持 Intel Mac</span>
           </div>
           <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);margin-bottom:14px">下载 Gloss</h2>
           <p class="lead" style="font-size:.95rem">
@@ -1081,7 +1111,7 @@ xattr -cr Gloss.app
 open Gloss.app</div>
           </div>
           <div class="code-box" style="margin-bottom:18px">
-            <div class="code-head">核心逻辑自检 · 65 项断言</div>
+            <div class="code-head">核心逻辑自检 · 68 项断言</div>
             <div class="code-body"><span class="cm"># 不依赖 Sparkle / AVFoundation，</span>
 <span class="cm"># 纯 swiftc 即可编译运行</span>
 swiftc -O SelfCheck/main.swift \
@@ -1175,7 +1205,7 @@ git clone https://github.com/yujuntea/gloss.git
 cd gloss
 open Gloss.xcodeproj   <span class="cm"># 直接 Cmd+R 运行</span>
 
-<span class="cm"># 核心纯逻辑自检（65 项断言，命令见下载区）</span>
+<span class="cm"># 核心纯逻辑自检（68 项断言，命令见下载区）</span>
 
 <span class="cm"># 规范打包发布（构建→验签→zip→appcast 签名）</span>
 ./scripts/release.sh --publish</div>
@@ -1404,23 +1434,60 @@ const WORD_DATA = {
     note:'注意区分：技术语境中 <em>operation</em> 指"一次可执行的动作"（单数），而 <em>operations</em> 作复数时往往指"运维/运营部门"或"军事行动"。'
   },
   idempotent: {
-    word:'idempotent', ipa:'/ˌaɪdemˈpɪtənt/', ipaUK:'/ˌaɪdəmˈpɪtənt/',
+    word:'idempotent', ipa:'/ˌaɪdemˈpoʊtənt/', ipaUK:'/ˌɪdəmˈpəʊtənt/',
     ctx:'指同一请求重复执行，结果不变',
     defs:['<em>adj.</em> 幂等的（数学/计算）；多次执行效果等同一次','<em>adj.</em> <em>idempotent operation</em> 幂等操作——可安全重试而不会产生副作用'],
     coll:['idempotent operation — 幂等操作','idempotent request — 幂等请求','idempotency key — 幂等键'],
     eg:[["POST is not <em>idempotent</em>.","（POST 不是幂等的。）"],
         ["An <em>idempotent</em> operation has the same effect whether run once or many times.","（幂等操作执行一次与多次效果相同。）"]],
     note:'来自数学的<em>幂等元</em>（idempotent element）概念。注意不要误拼为 <em>idempotant</em>；它强调的是"重复执行不改变结果"，而非"结果可预测"。'
+  },
+  durability: {
+    word:'durability', ipa:'/ˌdʊrəˈbɪləti/', ipaUK:'/ˌdjʊərəˈbɪləti/',
+    ctx:'数据一经确认，掉电、宕机也不会丢',
+    defs:['<em>n.</em> 持久性（存储/数据库语境）：写入的数据在断电、崩溃等故障下依然留存','<em>n.</em> 耐用性（日常语境）：物品经久使用的属性'],
+    coll:['durability guarantee — 持久性保证','ack after durability — 落盘后再确认','durable storage — 持久化存储'],
+    eg:[["A write is acknowledged only after it reaches <em>durable</em> storage.","（写入只有在到达持久化存储后才会被确认。）"],
+        ["Replication improves availability; <em>durability</em> is about not losing data at all.","（复制提升可用性；持久性关心的是数据完全不丢。）"]],
+    note:'对应 ACID 里的 D。注意区分：<em>persistence</em> 偏"数据存下来了"，<em>durability</em> 更强调"抗故障地留存"——on disk 有副本、断电也不丢，才敢叫 durable。'
+  },
+  'partial failure': {
+    word:'partial failure', ipa:'/ˈpɑːrʃl ˈfeɪljər/', ipaUK:'/ˈpɑːʃl ˈfeɪljə/',
+    ctx:'系统中部分组件失效，整体仍在运行',
+    defs:['<em>n.</em> 局部故障（分布式系统语境）：某些节点或链路出错，而非整个系统宕机'],
+    coll:['tolerate partial failure — 容忍局部故障','survive partial failures — 在局部故障下存活','partial failure is the norm — 局部故障是常态'],
+    eg:[["A distributed system must remain correct under <em>partial failure</em>.","（分布式系统必须在局部故障下仍保持正确。）"],
+        ["Unlike a single machine, a cluster always contends with <em>partial failures</em>.","（与单机不同，集群总要应对局部故障。）"]],
+    note:'分布式设计的核心前提：故障默认是<em>局部的</em>、部分的，而非全有或全无。与 <em>total failure</em>（整体宕机）相对——后者反而好处理，全员一致重启即可。'
+  },
+  'clock drift': {
+    word:'clock drift', ipa:'/klɑːk drɪft/', ipaUK:'/klɒk drɪft/',
+    ctx:'不同机器的时钟逐渐偏离、彼此不同步',
+    defs:['<em>n.</em> 时钟漂移：各机器时钟以略不同速率走时，误差随时间累积','<em>v.</em> drift 漂移；缓慢偏离原位'],
+    coll:['clock drift rate — 漂移速率','compensate for clock drift — 补偿时钟漂移','clocks drift apart — 时钟渐行渐远'],
+    eg:[["Clocks on different machines <em>drift</em> apart without synchronization.","（没有同步机制，各机器时钟会渐行渐远。）"],
+        ["<em>Clock drift</em> makes naive timestamp ordering unreliable.","（时钟漂移让朴素的按时间戳排序不可靠。）"]],
+    note:'注意与 <em>skew</em>（某一时刻两钟的偏差）和 <em>offset</em>（固定差值）区分：drift 强调"随时间缓慢累积"，所以同步协议（如 NTP）要周期性对时。'
+  },
+  misbehave: {
+    word:'misbehave', ipa:'/ˌmɪsbɪˈheɪv/', ipaUK:'/ˌmɪsbɪˈheɪv/',
+    ctx:'组件还在运行，只是不按预期方式',
+    defs:['<em>v.</em> （机器、组件）行为异常；不按预期方式运行','<em>v.</em> （人）举止不当；调皮'],
+    coll:['components misbehave — 组件行为异常','a misbehaving node — 异常节点','when systems misbehave — 当系统出岔子时'],
+    eg:[["Even when individual components <em>misbehave</em>, the system must make progress.","（即使个别组件行为异常，系统整体也必须继续推进。）"],
+        ["A slow disk is not a crash — it just <em>misbehaves</em>.","（磁盘变慢不是崩溃——只是行为异常。）"]],
+    note:'比 <em>fail</em> 更宽泛：fail 是"停了"，misbehave 是"还在跑但不守规矩"（变慢、返回错值、丢消息）。分布式系统最难对付的恰恰是 misbehave，因为它绕过了"宕机即失败"的简单假设。'
   }
 };
 
 function row(cls, html){
   return '<div class="st-row '+(cls||'')+'">'+html+'</div>';
 }
+const SPK_SVG = '<svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:-1px" aria-hidden="true"><path d="M3.5 8v4h2.8L10 15.3V4.7L6.3 8H3.5z" stroke-linejoin="round"/><path d="M12.5 7.5a3.5 3.5 0 0 1 0 5" stroke-linecap="round"/></svg>';
 function renderWord(key){
   const d = WORD_DATA[key] || WORD_DATA.idempotent;
   return row('w-title',
-      '<div class="word-line">'+d.word+'<span class="spk" title="朗读">🔊</span>'+
+      '<div class="word-line">'+d.word+'<span class="spk" title="朗读">'+SPK_SVG+'</span>'+
       '<span style="margin-left:auto;font-size:.68rem;color:var(--ink-3);font-weight:500">US</span>'+
       '<span style="font-size:.68rem;color:var(--teal);font-weight:600">UK</span></div>'+
       '<div class="ipa">'+d.ipa+' <b>'+d.ipaUK+'</b></div>')
@@ -1439,33 +1506,85 @@ function renderSentence(){
      '<li style="padding-left:14px">└ 逻辑主语：a quorum of replicas（法定数量的副本）</li></ul>')
    + row('s-h','<div class="lbl">难点</div><ul class="lst"><li><em>quorum</em> 是共识领域的固定译法"法定人数"，此处非"法定数量的人"，而是达到多数派的节点集合。</li></ul>')
    + row('s-v','<div class="lbl">句中难词</div><div style="display:flex;gap:7px;flex-wrap:wrap">'+
-     ['quorum','replica','acknowledge'].map(w=>'<span class="code-tag">'+w+' 🔊</span>').join('')+'</div>');
+     ['quorum','replica','acknowledge'].map(w=>'<span class="code-tag">'+w+' '+SPK_SVG+'</span>').join('')+'</div>');
 }
 function renderPara(){
   return row('p-tr','<div class="lbl" style="color:var(--teal);margin-top:0">对照翻译</div><p style="font-size:.85rem;line-height:1.75;color:#D9DFE7">分布式系统是由多台通过网络互联的计算机组成的群体，它们协调各自的行动，使整体表现得像一个单一而连贯的系统。不同于单台机器，分布式系统必须应对局部故障（<strong style="color:#fff">partial failure</strong>）：某些节点可能崩溃，某些网络链路可能丢失消息……</p>')
    + row('p-h','<div class="lbl">难词表</div><div style="display:flex;gap:7px;flex-wrap:wrap">'+
      [['coherent','连贯的'],['partial failure','局部故障'],['clock drift','时钟漂移'],['misbehave','行为异常']]
-       .map(x=>'<span class="code-tag" style="background:rgba(79,209,197,.1);border-color:rgba(79,209,197,.22);color:#9EE8E0">'+x[0]+' · '+x[1]+' 🔊</span>').join('')+'</div>');
+       .map(x=>'<span class="code-tag" style="background:rgba(79,209,197,.1);border-color:rgba(79,209,197,.22);color:#9EE8E0">'+x[0]+' · '+x[1]+' '+SPK_SVG+'</span>').join('')+'</div>');
 }
 const SEG_NAME = {w:'词查询', s:'句子查询', p:'段落查询'};
 
-function showCard(seg, key){
-  clearTimers();
-  // anchor the floating card over the reader body, inside the sim frame
-  const sim = card.parentElement;
-  const body = $('#heroText');
-  const sr = sim.getBoundingClientRect();
-  const br = body.getBoundingClientRect();
-  card.classList.add('show');
-  body.classList.add('dim');
+let cardAnchor = null; // 词锚定模式下记录选中的 tok，resize 重锚定时复用
+function positionCard(){
+  // 整幅模式：卡片盖住正文区。词锚定模式：352px 浮窗锚在选中单词旁（模拟 App 就地弹出），
+  // 卡身按所在侧的剩余空间自适应限高（内容可滚动），优先选空间更大的一侧；
+  // 两侧都放不下最小卡（<110px 身高）才回退整幅。必须在内容写入后调用（要量卡片高度）。
+  const sim = card.parentElement, body = $('#heroText');
+  const sr = sim.getBoundingClientRect(), br = body.getBoundingClientRect();
+  const fullW = Math.max(200, Math.round(br.width - 12));
+  if(cardAnchor && card.classList.contains('word-mode')){
+    const tr = cardAnchor.getBoundingClientRect();
+    const srTop = sr.top, srLeft = sr.left;
+    const cw = Math.min(352, fullW);
+    card.style.width = cw + 'px'; // 先定宽再量高，避免旧宽度下的布局高度误判
+    let left = Math.round(tr.left + tr.width/2 - srLeft - cw/2);
+    left = Math.max(6, Math.min(left, Math.round(sr.width - cw - 6)));
+    const belowY = Math.round(tr.bottom - srTop + 8);
+    const spaceBelow = sr.height - 6 - belowY;
+    const spaceAbove = Math.round(tr.top - srTop) - 38; // 38 = 红绿灯栏 36 + 间距
+    const placeBelow = spaceBelow >= spaceAbove;
+    const space = placeBelow ? spaceBelow : spaceAbove;
+    // 卡身限高：110–200px，随空间收缩（.card-body 可滚动，内容不丢）
+    cardBody.style.maxHeight = Math.max(110, Math.min(200, Math.round(space - 6 - 68))) + 'px';
+    const ch = card.offsetHeight;
+    let top = null, flip = false;
+    if(placeBelow){
+      if(belowY + ch <= sr.height - 6) top = belowY;
+    }else{
+      const wordTop = Math.round(tr.top - srTop);
+      const t2 = Math.max(38, wordTop - ch - 8); // 卡顶最低贴到红绿灯栏下沿，卡底不得压住单词
+      if(t2 + ch <= wordTop){ top = t2; flip = true; }
+    }
+    if(top !== null){
+      card.style.left = left + 'px';
+      card.style.top = top + 'px';
+      card.classList.toggle('flip', flip);
+      const ax = Math.max(18, Math.min(Math.round(tr.left + tr.width/2 - srLeft - left), cw - 18));
+      card.style.setProperty('--arrow-x', ax + 'px');
+      // resize 重锚定也同步徽章换边/清理
+      $$('#heroText .tok').forEach(t=> t.classList.remove('flip-tip'));
+      if(flip) cardAnchor.classList.add('flip-tip');
+      return;
+    }
+    cardAnchor = null;
+    card.classList.remove('word-mode');
+  }
+  cardBody.style.maxHeight = '';
+  $$('#heroText .tok').forEach(t=> t.classList.remove('pin-tip','flip-tip'));
+  card.classList.remove('flip');
+  card.style.width = fullW + 'px';
   card.style.left = Math.round(br.left - sr.left + 6) + 'px';
   card.style.top  = Math.round(br.top  - sr.top  + 6) + 'px';
-  card.style.width = Math.max(200, Math.round(br.width - 12)) + 'px';
-
+}
+function showCard(seg, key, anchorTok){
+  clearTimers();
+  cardAnchor = (seg==='w' && anchorTok) ? anchorTok : null;
+  card.classList.toggle('word-mode', !!cardAnchor);
   cardBody.innerHTML = seg==='w' ? renderWord(key) : (seg==='s' ? renderSentence() : renderPara());
   cardSrc.textContent = seg==='w' ? '⌥D' : '划词';
-
+  $('#heroKind').textContent = SEG_NAME[seg] || '词查询';
   $$('#heroCard .seg span').forEach(el=> el.classList.toggle('on', el.dataset.seg===seg));
+  positionCard();
+  // 选中的词钉住 ⌥D 徽章；卡片翻到词上方时徽章换到词下方，避免与卡片重叠
+  $$('#heroText .tok').forEach(t=> t.classList.remove('pin-tip','flip-tip'));
+  if(cardAnchor && card.classList.contains('word-mode')){
+    cardAnchor.classList.add('pin-tip');
+    if(card.classList.contains('flip')) cardAnchor.classList.add('flip-tip');
+  }
+  card.classList.add('show');
+  $('#heroText').classList.add('dim');
   const rows = $$('#heroCardBody .st-row');
   rows.forEach((r,i)=> later(()=>r.classList.add('in'), reduce ? 0 : 90*i));
 }
@@ -1473,6 +1592,8 @@ function hideCard(){
   clearTimers();
   card.classList.remove('show');
   $('#heroText').classList.remove('dim');
+  cardAnchor = null;
+  $$('#heroText .tok').forEach(t=>{ t.classList.remove('sel'); t.classList.remove('hint'); t.classList.remove('pin-tip'); t.classList.remove('flip-tip'); });
 }
 
 $$('#heroText .tok').forEach(tok=>{
@@ -1481,18 +1602,18 @@ $$('#heroText .tok').forEach(tok=>{
   tok.appendChild(tip);
   tok.setAttribute('role','button');
   tok.setAttribute('tabindex','0');
-  tok.setAttribute('aria-label','查词：' + tok.dataset.w);
+  tok.setAttribute('aria-label', tok.dataset.w ? '查词：' + tok.dataset.w : '查询整句');
   const act = (e)=>{
     if(e) e.stopPropagation();
-    $$('#heroText .tok').forEach(t=>{ t.classList.remove('sel'); t.classList.remove('hint'); });
+    $$('#heroText .tok').forEach(t=>{ t.classList.remove('sel'); t.classList.remove('hint'); t.classList.remove('pin-tip'); t.classList.remove('flip-tip'); });
     tok.classList.add('sel');
-    showCard(tok.dataset.t, tok.dataset.w);
+    showCard(tok.dataset.t, tok.dataset.w, tok.dataset.t==='w' ? tok : null);
   };
   tok.addEventListener('click', act);
-  tok.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ act(e); } });
+  tok.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); act(e); } });
 });
-// gently point at the first word so visitors discover the demo
-later(()=>{ const t=$('#heroText .tok'); if(t && !reduce) t.classList.add('hint'); }, 1600);
+// gently point at the first word so visitors discover the demo（卡片已开则不打扰）
+later(()=>{ const t=$('#heroText .tok'); if(t && !reduce && !$('.tok.sel')) t.classList.add('hint'); }, 1600);
 $$('#heroCard .seg span').forEach(seg=>{
   const act = (e)=>{
     e.stopPropagation(); e.preventDefault();
@@ -1508,23 +1629,28 @@ document.addEventListener('click', e=>{ if(!e.target.closest('#heroCard') && !e.
 /* ============================================================
    ROUTER demo
    ============================================================ */
-const rtInput = $('#rtInput'), rtWords=$('#rtWords'), rtPunct=$('#rtPunct'), rtChars=$('#rtChars'),
+const rtInput = $('#rtInput'), rtWords=$('#rtWords'), rtPunct=$('#rtPunct'), rtMid=$('#rtMid'), rtChars=$('#rtChars'),
       rtName=$('#rtName'), rtDesc=$('#rtDesc');
+/* 与 App 的 QueryRouter.classify 同源（Gloss/Core/QueryRouter.swift，勿单方修改）：
+   sentenceEnd = 含句末标点（任意位置）；midPunct = 含句中标点；
+   ≤3 词且两者皆无 → word；sentenceEnd 且 <60 词 → sentence；<400 → paragraph；否则 article。
+   已知差异：空输入在 Swift 侧判 paragraph，demo 里显示"—"占位（演示 UX 取向）；
+   另有个别 C1 控制符（如 NEL U+0085）Swift 计入空白而 JS \s 不含，选区场景实际不可达。 */
 function route(text){
   const t = (text||'').trim();
   const words = t ? t.split(/\s+/).filter(Boolean) : [];
   const n = words.length;
-  const endsPunct = /[.!?。！？;；:：]$/.test(t);
-  const hasInnerPunct = /[,，;；:：—–]/.test(t.replace(/[.!?。！？]\s*$/,''));
+  const sentEnd = /[.!?。！？…]/.test(t);
+  const midPunct = /[,;:，；：、]/.test(t);
   rtWords.textContent = n; rtChars.textContent = t.length;
-  rtPunct.textContent = endsPunct ? '有' : (hasInnerPunct ? '句中' : '无');
+  rtPunct.textContent = sentEnd ? '有' : '无';
+  rtMid.textContent = midPunct ? '有' : '无';
 
   let name, desc;
   if(n===0){ name='—'; desc='输入或选择一段文本，Gloss 会判断该出哪张卡。'; }
   else if(n>=400){ name='精读窗'; desc='长文精读：分批全文翻译、生词表、专业术语表、文章逻辑解读，左原文右四页签。'; }
-  else if(n<60 && endsPunct && n>3){ name='句子卡'; desc='忠实翻译 + 主干/从句结构拆解 + 句中难词（点击词条可继续查该词）。'; }
-  else if(n<=3 && !endsPunct && !hasInnerPunct){ name='单词卡'; desc='音标 + 语境义置顶、词性与释义、高频搭配、双语例句、词源辨析。'; }
-  else if(n<60){ name='句子卡'; desc='翻译优先，附结构拆解与难点说明（习语 / 倒装 / 指代 / 省略）。'; }
+  else if(n<=3 && !midPunct && !sentEnd){ name='单词卡'; desc='音标 + 语境义置顶、词性与释义、高频搭配、双语例句、词源辨析。'; }
+  else if(sentEnd && n<60){ name='句子卡'; desc='忠实翻译 + 主干/从句结构拆解 + 句中难词（点击词条可继续查该词）。'; }
   else { name='段落卡'; desc='对照翻译 + 难词表（3–6 个，按对理解的重要性排序，含音标与文中义）。'; }
   rtName.textContent = name; rtDesc.textContent = desc;
   return name;
@@ -1533,7 +1659,7 @@ rtInput.addEventListener('input', ()=> route(rtInput.value));
 const SAMPLES = {
   w:'idempotent',
   s:'When a quorum of replicas acknowledges a write, the value is considered committed.',
-  p:'A distributed system is a group of networked computers that coordinate their actions to appear as a single coherent system. Unlike a single machine, a distributed system must contend with partial failure.',
+  p:'Distributed systems are groups of networked computers that coordinate their actions to appear as a single coherent system. The first fundamental property to understand is idempotency. An operation is idempotent if performing it once has the same effect as performing it many times. Consider a payment service that receives a retry after a timeout: if the charge operation is idempotent, the customer is billed exactly once, because the second attempt recognizes that the first already succeeded.',
   r:null
 };
 $$('.chip[data-s]').forEach(chip=>{
@@ -1559,10 +1685,18 @@ route(rtInput.value);
 const shotBtn=$('#shotBtn'), selBox=$('#selBox'), shotResult=$('#shotResult'),
       srFields=$('#srFields'), shotHint=$('#shotHint'), thumbLbl=$('#thumbLbl');
 let shotRunning=false;
+/* 截图演示使用独立的定时器队列：与词卡演示的 later()/clearTimers() 隔离，
+   避免操作词卡时把这里的渐显定时器清掉、字段永远停在透明态 */
+let shotTimers = [];
+function shotLater(fn, ms){ shotTimers.push(setTimeout(fn, ms)); }
+function clearShotTimers(){ shotTimers.forEach(clearTimeout); shotTimers = []; }
+const srFieldsDefault = srFields.innerHTML; // 保留整图解读的初始字段，重跑演示时复位
 function runShot(){
   if(shotRunning) return; shotRunning=true;
-  shotBtn.innerHTML = '<kbd style="background:rgba(0,0,0,.22);border-color:rgba(0,0,0,.18);color:var(--teal)">⌥S</kbd> 框选区域';
   shotResult.classList.remove('show');
+  thumbLbl.textContent = '截图缩略图 · 点击任一单词继续查';
+  $$('#srThumb .word').forEach(x=>x.classList.remove('picked'));
+  srFields.innerHTML = srFieldsDefault;
   selBox.classList.remove('run'); void selBox.offsetWidth; selBox.classList.add('run');
   shotHint.textContent = '框选中——松手即发送…';
   const delay = reduce ? 100 : 1500;
@@ -1570,7 +1704,7 @@ function runShot(){
     selBox.classList.remove('run');
     shotResult.classList.add('show');
     shotHint.textContent = '松手 → 浮窗 <0.3s，读图结果首字 <3s。点缩略图上的单词可继续查该词。';
-    $$('#srFields > div').forEach((d,i)=> later(()=>d.classList.add('in'), reduce?0:130*i));
+    $$('#srFields > div').forEach((d,i)=> shotLater(()=>d.classList.add('in'), reduce?0:130*i));
     shotRunning=false;
   }, delay);
 }
@@ -1606,8 +1740,20 @@ $$('#srThumb .word').forEach(w=>{
          txt==='quorum' ? 'quorum read / quorum write — 多数派读 / 写' :
          'read replica — 只读副本')+
         '</li></ul></div>';
-    $$('#srFields > div').forEach((d,i)=> later(()=>d.classList.add('in'), reduce?0:110*i));
+    clearShotTimers();
+    $$('#srFields > div').forEach((d,i)=> shotLater(()=>d.classList.add('in'), reduce?0:110*i));
   });
+});
+
+// click a vocab word in the reader demo → jump to the hero word card
+$$('.vocab-w').forEach(v=>{
+  const act = (e)=>{
+    if(e) e.stopPropagation();
+    showCard('w', v.dataset.w);
+    document.querySelector('.reader-sim').scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block:'center'});
+  };
+  v.addEventListener('click', act);
+  v.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); act(e); }});
 });
 
 /* ============================================================
@@ -1639,12 +1785,18 @@ function fmtDate(iso){
   if(isNaN(d)) return '';
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-/* minimal, safe markdown -> html for release notes (no raw HTML passthrough) */
+/* minimal, safe markdown -> html for release notes.
+   先做 HTML 实体转义再套 markdown 替换：release body 里的裸 < > & " 不会被
+   当成标签吞掉或改变属性边界，注入面收敛到"只有本函数自己生成的标签"。
+   链接另有 scheme 白名单（http/https/站内路径与锚点/mailto），javascript: 等
+   危险协议直接降级为纯文本，不生成 <a>。 */
 function mdToHtml(md){
   return String(md||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
     .replace(/```[\s\S]*?```/g, m => '<code>' + m.replace(/```\w*\n?/g,'').trim() + '</code>')
     .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, txt, url) =>
+      /^(https?:\/\/|\/|#|mailto:)/i.test(url) ? '<a href="'+url+'" target="_blank" rel="noopener">'+txt+'</a>' : txt)
     .replace(/^#{1,6}\s*(.+)$/gm, '<b>$1</b>')
     .replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>')
     .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
@@ -1662,11 +1814,8 @@ function renderRelease(rel){
 
   if(ver){ setAll('[data-ver]', ver); }
   if(date){ setAll('[data-verdate]', date); }
-  if(date){
-    $$('.ver-date').forEach(el=>{
-      el.textContent = date + ' · ' + (zip ? '本版本起支持 Apple Silicon 与 Intel' : '最新发布');
-    });
-  }
+  // 注意：不动 .ver-date 的版本文案（"本版本起支持…"是 v0.1.7 专属陈述，
+  // live 拉取只刷新日期本身，否则未来每个版本都会错标新特性）
   // point the download buttons straight at the real asset (one click, no GitHub page)
   if(zip && zip.browser_download_url){
     ['#dlBtn','#dlBtn2'].forEach(sel=>{ const a=$(sel); if(a) a.href = zip.browser_download_url; });
@@ -1704,10 +1853,11 @@ else window.addEventListener('load', ()=> setTimeout(loadRelease, 300));
    ============================================================ */
 $$('.faq-i').forEach(item=>{
   const q = $('.faq-q', item), a = $('.faq-a', item);
+  q.setAttribute('aria-expanded', item.classList.contains('open') ? 'true' : 'false');
   q.addEventListener('click', ()=>{
     const open = item.classList.contains('open');
-    $$('.faq-i').forEach(o=>{o.classList.remove('open'); $('.faq-a',o).style.maxHeight=null;});
-    if(!open){ item.classList.add('open'); a.style.maxHeight = a.scrollHeight + 'px'; }
+    $$('.faq-i').forEach(o=>{o.classList.remove('open'); $('.faq-a',o).style.maxHeight=null; $('.faq-q',o).setAttribute('aria-expanded','false');});
+    if(!open){ item.classList.add('open'); a.style.maxHeight = a.scrollHeight + 'px'; q.setAttribute('aria-expanded','true'); }
   });
 });
 if($('.faq-i.open')) { const it=$('.faq-i.open'), a=$('.faq-a',it); setTimeout(()=>{a.style.maxHeight=a.scrollHeight+'px';},120); }
@@ -1720,11 +1870,25 @@ function openLb(src, cap){
   lb.classList.add('show'); document.body.style.overflow = 'hidden';
 }
 function closeLb(){ lb.classList.remove('show'); document.body.style.overflow = ''; }
-$$('.shot').forEach(s=> s.addEventListener('click', ()=> openLb(s.dataset.full, s.dataset.cap)));
+$$('.shot').forEach(s=>{
+  s.setAttribute('tabindex','0');
+  s.setAttribute('role','button');
+  s.setAttribute('aria-label','放大查看：' + (s.dataset.cap || '实机截图'));
+  s.addEventListener('click', ()=> openLb(s.dataset.full, s.dataset.cap));
+  s.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openLb(s.dataset.full, s.dataset.cap); }});
+});
 lb.addEventListener('click', closeLb);
 document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && lb.classList.contains('show')) closeLb(); });
 
-/* ---------- feature card spotlight ---------- */$$('.f').forEach(f=>{
+/* ---------- keep hero card anchored on reflow ----------
+   旧实现 resize 即 hideCard：移动端地址栏伸缩/窗口拖拽都会误杀演示中
+   的卡片。改为仅在卡片可见时重新锚定位置。 */
+window.addEventListener('resize', ()=>{
+  if(card.classList.contains('show')) positionCard();
+});
+
+/* ---------- feature card spotlight ---------- */
+$$('.f').forEach(f=>{
   f.addEventListener('mousemove', e=>{
     const r=f.getBoundingClientRect();
     f.style.setProperty('--mx', (e.clientX-r.left)+'px');
@@ -1733,7 +1897,7 @@ document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && lb.classList.
 });
 
 /* ---------- keep hero card inside viewport ---------- */
-window.addEventListener('resize', hideCard);
+/* reflow 锚定逻辑见上方 resize 处理器 */
 })();
 </script>
 </body>
