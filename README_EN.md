@@ -43,7 +43,9 @@ Grab the latest `Gloss-vX.Y.Z.zip` from [Releases](../../releases) and unzip to 
 >
 > On macOS 14, right-click the app → Open also works.
 
-**Requires**: macOS 14 (Sonoma) or later, Apple Silicon.
+**Requires**: macOS 14 (Sonoma) or later, on **Apple Silicon (M-series) or Intel**. The download is a universal binary carrying both architectures, so both kinds of Mac use the same zip — no separate download, and no Rosetta needed on Intel.
+
+> On Intel, your Mac needs to be able to run macOS 14 — i.e. Apple's official Sonoma list: MacBook Pro 2018 or later (15" 2018, 13" 2018 with four Thunderbolt ports), MacBook Air 2018 or later, Mac mini 2018, iMac 2019 or later, iMac Pro 2017, Mac Pro 2019. Machines stuck on macOS 13 (Ventura) or earlier — such as the 2017 MacBook Pro / MacBook / iMac — are not supported yet; see [DESIGN.md](docs/DESIGN.md) D10.
 
 ## Quick start
 

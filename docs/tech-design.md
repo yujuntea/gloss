@@ -352,15 +352,22 @@ swiftc -O -o /tmp/selfcheck \
 
 **手工验收矩阵（M1 发布前）**：通道（服务/⌥D/⌥S）× 目标 App（Safari、Chrome、微信、Preview 文本型 PDF、Terminal、VS Code）× 预期（取词成功或降级提示正确）；权限三态（未授权/授权后/重签后失效）；ESC/外点/固定；缓存徽标与重查。
 
-## 11. 构建与签名（D4，2026-09-27 校准）
+## 11. 构建与签名（D4/D10，2026-09-29 校准）
 
 1. **直接打开工程运行**：`open Gloss.xcodeproj`（Xcode 16+，Cmd+R）。工程已提交且签名配置就绪——`CODE_SIGN_STYLE=Manual` + `CODE_SIGN_IDENTITY="Apple Development: yujundqq@icloud.com (2ZB8Z6VPSS)"`（Team ID = `XB7CMSZH3F`，注意 CN 括号内的 `2ZB8Z6VPSS` 是 UID 而非 Team ID）；App Sandbox **不勾选**。
 2. **Info.plist 键**：`LSUIElement=YES`；`NSServices`（§4.6）；`LSMinimumSystemVersion=14.0`；`SUFeedURL`/`SUPublicEDKey`（§4.11）；版本号经 `$(MARKETING_VERSION)`/`$(CURRENT_PROJECT_VERSION)` 注入，**不在 plist 里写字面量**。
 3. **SPM 依赖**：`Sparkle`（upToNextMajor 2.10.0），版本由 `project.xcworkspace/xcshareddata/swiftpm/Package.resolved` 锁定并入库，保证可复现构建。
-4. **规范构建/发布**：`scripts/release.sh`（Release 构建 → 证书链硬校验 → Sparkle 配置防呆 → ditto 打 zip → `sign_update` EdDSA 签名 → 生成 `dist/appcast.xml`）；`scripts/release.sh --publish` 追加创建 GitHub Release 并上传 zip + appcast。发版只需在 pbxproj 同步递增两个版本旋钮。产物：`build/Gloss.app`（本机安装）、`dist/Gloss-vX.Y.Z.zip`、`dist/appcast.xml`。
-5. **证书有效期与权限**：Apple Development 证书有效期至 **2027-09-26**（年度续签，非早期免费 Team 的 7 天 profile）。实证：同一证书跨多次重建稳定，**TCC（辅助功能/屏幕录制）授权不随重建丢失**——更新包沿用同一证书签名，升级后授权保持。更换 Apple 证书不影响 Sparkle 更新链（锚定的是 EdDSA 密钥对）。
-6. **未公证的既有负担**：未走 Apple 公证，Gatekeeper 首次拦截为预期行为，下载者需在「系统设置 → 隐私与安全性 → 仍要打开」放行一次。
-7. 首次运行后右键服务若未出现：注销重登或确认服务已勾选（§4.6）。
+4. **规范构建/发布**：`scripts/release.sh`（Release 构建 → **通用二进制校验** → 证书链硬校验 → Sparkle 配置防呆 → ditto 打 zip → `sign_update` EdDSA 签名 → 生成 `dist/appcast.xml`）；`scripts/release.sh --publish` 追加创建 GitHub Release 并上传 zip + appcast。发版只需在 pbxproj 同步递增两个版本旋钮。产物：`build/Gloss.app`（本机安装）、`dist/Gloss-vX.Y.Z.zip`、`dist/appcast.xml`。
+5. **通用二进制（arm64 + x86_64，D10）**：Release 产出同时含两种架构的 fat binary，Apple Silicon 与 Intel 共用同一个 zip（1.5MB → 2.0MB），Sparkle 更新链路不区分架构、无需 per-arch variants。三个必守约束——
+   - **必须带 `-destination 'generic/platform=macOS'`**：不带 destination 时 xcodebuild 走「My Mac」目标只构建本机架构，工程里 `ARCHS=arm64 x86_64` 会被目标约束**静默覆盖**（v0.1.0~v0.1.6 七个版本全是 arm64 单架构，发布流程零报错）；脚本同时显式传 `ARCHS`/`ONLY_ACTIVE_ARCH=NO` 兜底。
+   - **出包前 lipo 闸门**（`release.sh` 内「发布闸 0」，全部 fail-closed）：遍历 bundle 内**每一个** Mach-O（`find -type f -perm -u+x` + `lipo -archs` 过滤），逐一验双架构齐全 + 各切片 `minos` **不得高于** `LSMinimumSystemVersion`（高于 = 装得上却起不来；低于是正常的，如 Sparkle 各组件 minos=12.0，不能拦）。**必须遍历而非只验主二进制**：Sparkle 的 `Updater.app` / `Autoupdate` / `Downloader.xpc` / `Installer.xpc` 才是用户机器上真正执行更新动作的进程，Intel 上缺 x86_64 切片会表现为「App 能启动但更新静默失败」，而这些进程不在启动路径上，本地任何环节都不报错。当前 6 个 Mach-O，另有「识别数 < 2 即视为扫描失效」的兜底，防遍历静默失效。另对 `Sparkle.framework` 本体显式点名验存在——它整个缺失时遍历扫不到，而 `codesign -v --deep` 对不存在的嵌套代码同样不报错。
+   - **pbxproj 侧**：Release 配置显式写 `ARCHS = "arm64 x86_64"` + `ONLY_ACTIVE_ARCH = NO`；Debug 保留 `ONLY_ACTIVE_ARCH = YES`（本机快迭代）。
+   - **下限 14.0 不动**：缓存层用 SwiftData（`GlossModels.swift`/`DataStore.swift`，macOS 14+），降到 13 需重写存储层。故 Intel 覆盖面 = Apple 官方 macOS 14 Sonoma 支持清单：MacBook Pro 2018 起（15″ 2018、13″ 2018 四雷雳口）、MacBook Air 2018 起、Mac mini 2018、**iMac 2019 起**（无 2018 款 iMac）、**iMac Pro 2017**、Mac Pro 2019；停在 Ventura 13 及更早的机型（2017 款 MacBook Pro / MacBook / iMac）不支持。
+   - **代码零改动**：全量 import 无架构相关框架（无 Metal/CoreML/SIMD/Accelerate），无 `#if arch(...)`/`uname`，Carbon 热键与 AVFoundation TTS 均架构中立；x86_64 切片经 Rosetta 实测可正常启动。
+6. **脚本编码坑（2026-09-29 实证）**：macOS 默认 UTF-8 locale 下，bash 会把紧跟 `$VAR` 的**全角标点**并入变量名，`"$APP_ARCHS（…"` 解析成 `APP_ARCHS\xef…`，在 `set -u` 下直接以 unbound variable 中止脚本。凡 `$VAR` 后紧跟全角标点，一律写 `${VAR}`。已修 `release.sh` 三处（新增的架构回显 + `--publish` 的 build 号闸门错误/通过回显；后两处一旦走到就会中断发布）。
+7. **证书有效期与权限**：Apple Development 证书有效期至 **2027-09-26**（年度续签，非早期免费 Team 的 7 天 profile）。实证：同一证书跨多次重建稳定，**TCC（辅助功能/屏幕录制）授权不随重建丢失**——更新包沿用同一证书签名，升级后授权保持。实证补充：universal 与 arm64 单架构的 **designated requirement 字符串逐字一致**（`codesign -dr -`），故 arm64 老用户升到通用二进制版后权限授权同样保持。更换 Apple 证书不影响 Sparkle 更新链（锚定的是 EdDSA 密钥对）。
+8. **未公证的既有负担**：未走 Apple 公证，Gatekeeper 首次拦截为预期行为，下载者需在「系统设置 → 隐私与安全性 → 仍要打开」放行一次。
+9. 首次运行后右键服务若未出现：注销重登或确认服务已勾选（§4.6）。
 
 ## 12. 里程碑任务拆解
 

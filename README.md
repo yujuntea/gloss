@@ -43,7 +43,9 @@
 >
 > macOS 14 也可右键 App → 打开。
 
-**系统要求**：macOS 14（Sonoma）及以上，Apple Silicon。
+**系统要求**：macOS 14（Sonoma）及以上；**Apple Silicon（M 系列）与 Intel 都支持**。安装包是同时含两种架构的通用二进制，两种机器用同一个 zip，不需要分别下载，Intel 端也不需要装 Rosetta。
+
+> Intel 机型需要能装 macOS 14，即 Apple 官方的 Sonoma 支持清单：MacBook Pro 2018 起（15″ 2018、13″ 2018 四雷雳口）、MacBook Air 2018 起、Mac mini 2018、iMac 2019 起、iMac Pro 2017、Mac Pro 2019。如果你的机器停在 macOS 13（Ventura）或更早（如 2017 款 MacBook Pro / MacBook / iMac），本 App 暂不支持——原因见 [DESIGN.md](docs/DESIGN.md) D10。
 
 ## 快速开始
 
