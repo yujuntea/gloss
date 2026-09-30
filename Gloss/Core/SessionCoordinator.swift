@@ -25,6 +25,10 @@ final class CardState: ObservableObject, Identifiable {
     @Published var phase: CardPhase = .loading
     @Published var content: String = ""
     @Published var reasoningActive = false
+    /// 思考流尾部预览（ReasoningPreview 展示；固定高滚动区，不入缓存不入历史）
+    @Published var reasoningText = ""
+    /// 本轮首条思考 delta 的时刻（「思考中 · Ns」计时起点；retry 时重置）
+    var reasoningStartedAt: Date?
     @Published var usedCache = false
 
     init(kind: QueryKind, inputText: String?, context: String?, origin: InputOrigin,
@@ -57,6 +61,16 @@ final class CardState: ObservableObject, Identifiable {
 @MainActor
 final class SessionCoordinator: ObservableObject {
     static let shared = SessionCoordinator()
+
+    /// 两级流式超时口径，语义见 LLMClient.VisibleIdleMonitor：
+    /// ① 20s 无任何 delta（流假活）→「模型响应超时」；② 90s 有思考流但零正文（思考死循环）→「模型思考时间过长」。
+    /// 思考流展示给用户（ReasoningPreview）后即重置①，长思考不再被「20s 无正文」误杀。
+    static let visibleIdleLimit: TimeInterval = VisibleIdleMonitor.eventLimit
+    static let thinkingLimit: TimeInterval = VisibleIdleMonitor.thinkingLimit
+    /// 思考流预览的刷新间隔：delta 很密，逐条刷 @Published 会打爆 SwiftUI；节流后足够「实时」
+    static let reasoningFlushInterval: TimeInterval = 0.2
+    /// 思考预览的存储上限：只需尾部 ~3 行供预览，封顶防长思考占内存与渲染成本
+    static let reasoningTailMaxChars = 4000
 
     @Published private(set) var stack: [CardState] = []
     @Published var pinned = false
@@ -164,9 +178,13 @@ final class SessionCoordinator: ObservableObject {
         runText(card: card)
     }
 
-    func pushWordAtQuery(image: NSImage, point: CGPoint) {
-        guard stack.count < 2, stack.first?.kind == .screenshotExplain else { return }
+    /// 图上点词。clickRect = 点击点的 Cocoa 屏幕坐标（图片窗路径传，缩略图就地点词与 demo 通道传 nil）。
+    func pushWordAtQuery(image: NSImage, point: CGPoint, clickRect: CGRect? = nil) {
+        guard stack.first?.kind == .screenshotExplain else { return }
         cancelCurrent()
+        // 栈顶替换（D-e）：图片窗保持打开以便连续点词，第 2 次点击若沿用「栈深 <2 否则静默拒绝」，
+        // 用户既看不到新卡（面板已被藏）也回不去——替换栈顶，深度仍 ≤2，返回按钮语义不变
+        if stack.count >= 2 { stack.removeLast() }
         let quantized = CGPoint(x: (point.x * 100).rounded() / 100, y: (point.y * 100).rounded() / 100)
         let card = CardState(kind: .screenshotWordAt, inputText: nil, context: nil, origin: .screenshot,
                              selectionBounds: nil, kindParams: KindParams(point: quantized, pageIndex: nil),
@@ -174,6 +192,11 @@ final class SessionCoordinator: ObservableObject {
         card.phase = .loading
         stack.append(card)
         revision += 1
+        // 结果面板去向：点击源在图片窗（另一个窗口），面板被藏时不置前就看不到结果；
+        // 条件式——缩略图就地点词时面板必可见，不重定位，现状行为完全保留
+        if !PanelController.shared.isVisible {
+            PanelController.shared.show(near: clickRect)
+        }
         guard let proc = ImagePipeline.normalize(image, maxEdge: 1568) else {
             card.phase = .failed("图像处理失败")
             return
@@ -198,8 +221,7 @@ final class SessionCoordinator: ObservableObject {
         cancelCurrent()
         let card = CardState(kind: kind, inputText: text, context: root.context, origin: root.origin,
                              selectionBounds: root.selectionBounds, kindParams: nil, originalImage: nil, thumbnail: nil)
-        stack = [card]
-        revision += 1
+        setRoot(card: card)
         runText(card: card)
     }
 
@@ -219,6 +241,8 @@ final class SessionCoordinator: ObservableObject {
         cancelCurrent()
         card.content = ""
         card.reasoningActive = false
+        card.reasoningText = ""
+        card.reasoningStartedAt = nil
         card.usedCache = false
         switch card.kind {
         case .screenshotExplain:
@@ -293,9 +317,16 @@ final class SessionCoordinator: ObservableObject {
 
     // MARK: - 内部
 
-    private func show(card: CardState, bounds: CGRect?) {
+    /// 置栈根的唯一入口：所有换根路径（show/replay/requery）必须走它，否则新加的置根点会漏掉关图片窗。
+    /// 换根即关图（D-f）：图片窗生命周期绑定栈根会话。
+    private func setRoot(card: CardState) {
+        WindowManager.shared.closeImageWindow()
         stack = [card]
         revision += 1
+    }
+
+    private func show(card: CardState, bounds: CGRect?) {
+        setRoot(card: card)
         PanelController.shared.show(near: bounds)
     }
 
@@ -316,7 +347,7 @@ final class SessionCoordinator: ObservableObject {
     private func runText(card: CardState, useCache: Bool = true) {
         let model = SettingsStore.shared.activeConfig?.model ?? ""
         let key = CacheStore.makeKey(normalizedInput: QueryRouter.cacheNormalized(card.inputText ?? ""),
-                                     kind: card.kind, params: nil, model: model)
+                                     kind: card.kind, params: nil, model: model, context: card.context)
         let prompt = PromptLibrary.userPrompt(kind: card.kind, text: card.inputText ?? "", context: card.context)
         run(card: card, cacheKey: key, imageJPEG: nil, prompt: prompt, useCache: useCache)
     }
@@ -347,43 +378,104 @@ final class SessionCoordinator: ObservableObject {
         currentTask?.cancel()
         GlossLog.info("query begin kind=\(card.kind.rawValue) key=\(cacheKey.prefix(12))")
         currentTask = Task { [weak self] in
+            // 闭包即查即用（存活期=单次查询），先升级强引用：否则 async let 派生 consume 的
+            // 隐式 self 会绕过 [weak self] 实为强捕获（K3 终审实证），且 Swift 6 下是硬错误
+            guard let self else { return }
             do {
                 let messages = [PromptLibrary.systemMessage(), ChatMessage(role: .user, text: prompt, imageJPEG: imageJPEG)]
                 let stream = LLMClient.stream(messages: messages, config: config, apiKey: apiKey)
-                for try await event in stream {
-                    switch event {
-                    case .reasoningDelta:
-                        card.reasoningActive = true
-                    case .contentDelta(let s):
-                        card.reasoningActive = false
-                        card.content += s
-                        if card.phase != .streaming { card.phase = .streaming }
-                        self?.revision += 1
-                    case .done:
-                        break
+                let idle = VisibleIdleMonitor(eventLimit: Self.visibleIdleLimit, thinkingLimit: Self.thinkingLimit)
+                // 空闲超时必须在**流外**计时（2026-09-29 实机验收实证）：把超时判定放在
+                // `for try await` 循环体内，只在有事件到达时才被检查——流零事件时循环体一次都不
+                // 执行，守卫等于不存在。竞速结构让「零事件的流」也能被计时器打断。
+                async let consumed: Void = self.consume(stream, card: card, cacheKey: cacheKey, model: config.model, idle: idle)
+                async let timeout: VisibleIdleTimeout? = idle.waitForTimeout()
+                let timedOut = await timeout
+                if let reason = timedOut {
+                    GlossLog.error("stream idle timeout kind=\(card.kind.rawValue) reason=\(String(describing: reason)) eventIdle=\(Int(idle.eventIdleSeconds()))s")
+                    switch reason {
+                    case .noEvent: throw AppError.timeout
+                    case .thinkingOnly: throw AppError.thinkingTimeout
                     }
                 }
-                guard !Task.isCancelled else { return }
-                if card.content.isEmpty {
-                    card.phase = .failed("模型未返回内容")
-                } else {
-                    card.phase = .done
-                    CacheStore.shared.put(cacheKey, card.content)
-                    self?.saveHistory(card: card, model: config.model)
-                }
-                self?.revision += 1
-                GlossLog.info("query done kind=\(card.kind.rawValue) chars=\(card.content.count)")
+                try await consumed
             } catch let e as AppError {
                 if case .cancelled = e { return }
+                // 超时与正常收尾撞在同一瞬间时 consume 可能已把卡置 .done 并落缓存，
+                // 此时再盖成 .failed 会让用户看到"失败"却查得到结果（复审实证：边界注入 300 次 298 复现）
+                if card.phase == .done { return }
                 card.phase = .failed(e.errorDescription ?? "查询失败")
-                self?.revision += 1
+                revision += 1
                 GlossLog.error("query failed kind=\(card.kind.rawValue) \(e.errorDescription ?? "?")")
             } catch is CancellationError {
                 return
             } catch {
                 card.phase = .failed("查询失败：\(error.localizedDescription)")
-                self?.revision += 1
+                revision += 1
             }
+        }
+    }
+
+    /// 消费模型流：累加内容与思考预览、驱动卡片相位、落缓存与历史。计时由 `idle` 独立进行（见 run 内注释）。
+    private func consume(_ stream: AsyncThrowingStream<StreamEvent, Error>, card: CardState,
+                         cacheKey: String, model: String, idle: VisibleIdleMonitor) async throws {
+        defer { idle.finish() }
+        var pendingReasoning = ""
+        var lastFlush = Date()
+        for try await event in stream {
+            switch event {
+            case .reasoningDelta(let s):
+                card.reasoningActive = true
+                if card.reasoningStartedAt == nil {
+                    card.reasoningStartedAt = Date()
+                    // 首条思考 delta 会净增面板内容高度（ReasoningPreview ~50pt）；
+                    // 思考期间不再逐 delta bump（防抖动），但这一次必须 bump，
+                    // 否则面板仍按无思考骨架定高，尾部滚动区整块落在面板折叠线下看不见（L2a 实证）
+                    revision += 1
+                }
+                // 思考流已展示给用户（ReasoningPreview），算进展：重置「无事件」计时；
+                // 但不算内容：不重置「纯思考」计时（VisibleIdleMonitor 注释）
+                idle.markEvent()
+                // 节流刷新：delta 很密，逐条刷 @Published 打爆 SwiftUI；攒到间隔再上卡
+                pendingReasoning += s
+                let now = Date()
+                if now.timeIntervalSince(lastFlush) >= Self.reasoningFlushInterval {
+                    appendReasoningTail(card: card, pendingReasoning)
+                    pendingReasoning = ""
+                    lastFlush = now
+                }
+            case .contentDelta(let s):
+                // 首条正文前把攒着的思考尾部冲上卡，预览尾部才完整
+                if !pendingReasoning.isEmpty {
+                    appendReasoningTail(card: card, pendingReasoning)
+                    pendingReasoning = ""
+                }
+                card.reasoningActive = false
+                card.content += s
+                idle.markVisible()
+                if card.phase != .streaming { card.phase = .streaming }
+                revision += 1
+            case .done:
+                break
+            }
+        }
+        guard !Task.isCancelled else { return }
+        if card.content.isEmpty {
+            card.phase = .failed("模型未返回内容")
+        } else {
+            card.phase = .done
+            CacheStore.shared.put(cacheKey, card.content)
+            saveHistory(card: card, model: model)
+        }
+        revision += 1
+        GlossLog.info("query done kind=\(card.kind.rawValue) chars=\(card.content.count)")
+    }
+
+    /// 思考尾部上卡 + 封顶（两条冲批路径共用，防超上限后不再裁）
+    private func appendReasoningTail(card: CardState, _ text: String) {
+        card.reasoningText += text
+        if card.reasoningText.count > Self.reasoningTailMaxChars {
+            card.reasoningText = String(card.reasoningText.suffix(Self.reasoningTailMaxChars))
         }
     }
 
@@ -403,8 +495,7 @@ final class SessionCoordinator: ObservableObject {
         card.content = response
         card.usedCache = true
         card.phase = .done
-        stack = [card]
-        revision += 1
+        setRoot(card: card)
         PanelController.shared.show(near: nil)
     }
 }

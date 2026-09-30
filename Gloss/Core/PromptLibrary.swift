@@ -1,9 +1,16 @@
 import CoreGraphics
 import Foundation
 
-/// Prompt 模板（与 tech-design §4.3 对应，PROMPT_VERSION 参与缓存键）。
+/// Prompt 模板（与 tech-design §4.3 对应；版本号按 kind 分档，参与缓存键）。
 enum PromptLibrary {
-    static let version = "m1"
+    /// 按 kind 分版本（§5.1）：截图整图/点词改 prompt 后必须升版，否则老用户命中旧缓存拿不到新结构；
+    /// 词/句/段 prompt 未动，保持 m1 以免全量缓存失效（决策 D-d）。不做全局常量是防双源漂移。
+    static func version(for kind: QueryKind) -> String {
+        switch kind {
+        case .screenshotExplain, .screenshotWordAt: return "m2"
+        default: return "m1"
+        }
+    }
 
     static func systemMessage() -> ChatMessage {
         ChatMessage(role: .system, text: "你是 Gloss——macOS 上的英文阅读理解助手。始终用简体中文回答，严格按用户消息给定的 Markdown 结构输出，不添加额外内容。")
@@ -66,6 +73,10 @@ enum PromptLibrary {
             {中文翻译；若含图表/界面，先说明它展示什么，再解释关键信息}
             **要点**
             - {2–4 条：生词、术语、值得注意的信息}
+            **难词表**
+            | 词/短语 | 音标 | 图中义 | 图中原文例句 |
+            |---|---|---|---|
+            | {3–6 行，按对理解的重要性排序；图中原文例句须与**识别内容**节的转写逐字一致，不新造不改写（防污染传入 word 查询的语境）；例句内含竖线 `\\|` 时以 `/` 替代（表格按朴素 `\\|` 切分，防单元格错位）；无值得深挖的英文词则整节省略}
             """
         case .screenshotWordAt:
             let x = Int(((point?.x ?? 0) * 100).rounded())
@@ -74,6 +85,7 @@ enum PromptLibrary {
             用户在截图中点击了坐标（\(x)%，\(y)%）附近，想查那里的英文单词/短语。
             定位最接近点击处的英文词，按"词"模板结构输出（## 词 → 美英音标 → 语境义取它在本图语境中的含义 → 词性与释义 → 高频搭配 → 例句 → 辨析）。
             若点击处附近没有英文单词：明确说明，并列出图中主要英文词供选择。
+            若该位置附近存在多个候选词且无法确定：不要猜测，列出 2–4 个候选并请用户选择。
             """
         case .article, .pdfPage:
             return text

@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// 响应缓存：键 = sha256(归一化输入 | kind | kindParams | model | PROMPT_VERSION)。
+/// 响应缓存：键 = sha256(归一化输入 | kind | kindParams | model | version(for:kind) [| ctx 摘要])。
 /// LRU（依赖访问时间淘汰）；持久化经 DataStore 回写（容器不可用时仅内存）。
 final class CacheStore {
     static let shared = CacheStore()
@@ -23,13 +23,17 @@ final class CacheStore {
         lock.unlock()
     }
 
-    static func makeKey(normalizedInput: String, kind: QueryKind, params: KindParams?, model: String) -> String {
-        var payload = "\(normalizedInput)|\(kind.rawValue)|\(model)|\(PromptLibrary.version)"
+    static func makeKey(normalizedInput: String, kind: QueryKind, params: KindParams?, model: String, context: String? = nil) -> String {
+        var payload = "\(normalizedInput)|\(kind.rawValue)|\(model)|\(PromptLibrary.version(for: kind))"
         if let p = params?.point {
             // 1% 网格量化：防同图不同点词互相命中，也防浮点抖动永不命中（K-P1-5 修复）
             payload += String(format: "|pt:%d,%d", Int((p.x * 100).rounded()), Int((p.y * 100).rounded()))
         }
         if let pi = params?.pageIndex { payload += "|pg:\(pi)" }
+        // 语境入键（D-b）：同一词在不同语境下语境义不同，不入键会串味；ctx 摘要先归一，同语境空白变体同键
+        if kind == .word, let c = context, !c.isEmpty {
+            payload += "|ctx:" + glossSHA256(QueryRouter.cacheNormalized(c)).prefix(8)
+        }
         return glossSHA256(payload)
     }
 

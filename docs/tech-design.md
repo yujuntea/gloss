@@ -61,7 +61,7 @@ gloss/
 │   │   ├── SessionCoordinator.swift # 会话状态机、取消、防抖
 │   │   ├── LLMClient.swift        # OpenAI 兼容 SSE + 多模态
 │   │   ├── SSEParser.swift        # data: 行解析（独立可测）
-│   │   ├── PromptLibrary.swift    # 5 套模板 + PROMPT_VERSION
+│   │   ├── PromptLibrary.swift    # 5 套模板 + 分 kind 版本号
 │   │   ├── SectionExtractor.swift # 精读文本分节（独立可测）
 │   │   ├── ImagePipeline.swift    # 缩放/JPEG 压缩（截图 1568 / PDF 页 2200 长边上限）
 │   │   ├── TTSEngine.swift        # AVSpeechSynthesizer 封装
@@ -72,11 +72,12 @@ gloss/
 │   │   ├── GlossLog.swift         # 统一日志
 │   │   └── UpdaterCenter.swift    # Sparkle 更新单例：版本号/检查/自动检查开关（v0.1.3）
 │   ├── UI/
-│   │   ├── WindowManager.swift    # 设置/精读/历史/向导 窗口编排
+│   │   ├── WindowManager.swift    # 设置/精读/历史/向导/图片放大 窗口编排
 │   │   ├── PanelController.swift  # NSPanel 生命周期/定位/事件监听
 │   │   ├── ResultPanelView.swift  # 浮窗根视图（顶栏/卡片区/操作条）
 │   │   ├── CardViews.swift        # WordCard/SentenceCard/ParagraphCard/ScreenshotCard
 │   │   ├── MarkdownView.swift     # 自研流式 Markdown 渲染
+│   │   ├── ImageZoomWindow.swift  # 图片放大窗（原图 fit 满窗/十字准星/整图点词，§4.12）
 │   │   ├── ReaderWindow.swift     # 精读窗（文本模式 M1 / PDF 模式 M2）
 │   │   ├── SettingsWindow.swift   # 四页签（高级页含版本与更新区块，v0.1.4）
 │   │   └── HistoryWindow.swift
@@ -110,7 +111,8 @@ gloss/
 1. `ScreenshotManager.capture()`：`Process` 执行 `/usr/sbin/screencapture -i -c`（交互框选，结果进剪贴板）。取消判定 = "退出码 + 剪贴板无新图"双条件（退出码语义以 §13-C2 实测为准，勿单独依赖）。取消 → 直接返回不弹窗。
 2. 成功：读 pasteboard 图片 → **立即恢复**用户原剪贴板 → `ImagePipeline.normalize(image, maxEdge: 1568)`（等比缩放 + JPEG q0.85 + 计算 sha256 用作缓存键成分）。
 3. `SessionCoordinator` 以 `QueryInput.image` 建立 → 默认 Prompt = 读图解释 → 多模态请求（§6.2）→ 截图卡流式渲染。
-4. 图上点词：缩略图 `onTapGesture` + `GeometryReader` 换算归一化坐标 (x%, y%) → 以原图 + 坐标重新请求（Prompt = 点词定位），复用同一面板切换为单词卡，卡顶加「返回整图」。
+4. 图上点词：缩略图 `SpatialTapGesture` + `GeometryReader` 换算归一化坐标 (x%, y%) → 以原图 + 坐标重新请求（Prompt = 点词定位），复用同一面板切换为单词卡，卡顶加「返回整图」。缩略图点击**按原图自然宽度与卡片实测可用宽分流**（`ImageGeometry.needsZoomWindow`）：原图自然宽 ≤ 卡片当前可用宽就地点词；宽于此则正文在 160pt 缩略图里不可读，改为打开图片放大窗（§4.12）在整图上点词。卡宽取实测 `geo.size.width`（当前 `ResultPanelView` 以 `.frame(width: 400)` 把内容宽钉死，实测恒为 376；按实测值判定可免面板将来可调宽时回头改此处）。历史回放卡只有 ≤200px 缩略图，自然落在阈值内 → 永不开放大窗。
+5. 截图卡的生词入口：读图 prompt 输出 `**难词表**`（§4.3），卡片按 §4.3 的取数契约拆成 chips（`WordChipsRow`），每行以「图中原文例句」为语境下钻；该表同时从卡片正文中移除，不重复渲染。
 
 ### 3.4 PDF 流〔M2〕
 
@@ -145,17 +147,18 @@ func classify(_ text: String, origin: InputOrigin) -> QueryKind
 struct LLMConfig: Codable { var presetID: String; var baseURL: URL; var chatPath: String; var apiKeyRef: String /*Keychain*/; var model: String; var temperature: Double }
 struct ChatMessage { var role: Role; var text: String; var images: [ProcessedImage] }  // images 非空 → 多模态
 func stream(_ messages: [ChatMessage], config: LLMConfig) -> AsyncThrowingStream<StreamEvent, Error>
-enum StreamEvent { case reasoningDelta(String); case contentDelta(String); case done(usage: Usage?) }
+enum StreamEvent { case reasoningDelta(String); case contentDelta(String); case done }
 ```
 
 - 请求体：`{model, messages, stream:true, temperature}`；多模态消息的 content 为数组 `[{type:"text",text}, {type:"image_url",image_url:{url:"data:image/jpeg;base64,…"}}]`（OpenAI 兼容通行格式）。
-- 传输：`URLSession.bytes(for:)` 逐行读，`SSEParser` 处理 `data:` 前缀、`[DONE]`、`choices[0].delta.content` 与 `delta.reasoning_content`（M3 混合推理：reasoning 流只驱动 UI「思考中…」指示，不渲染内容）。
-- 超时：流式空闲（20s 无任何 delta）取消并抛 `timeout`；连接超时与流空闲共用 20s 口径（URLSession 单配置无法分离连接级 10s，原"连接 10s"设计经 K3 终审回填为本口径）。
+- 传输：`URLSession.bytes(for:)` 逐行读，`SSEParser` 处理 `data:` 前缀、`[DONE]`、`choices[0].delta.content` 与 `delta.reasoning_content`（M3 混合推理：reasoning 流驱动骨架屏内的思考尾部预览，见下方「思考流展示」）。
+- 超时：**三层**——①网络层 `timeoutIntervalForRequest`（20s）管「连接死」；②流外计时器 `VisibleIdleMonitor`（与流消费 `async let` 竞速）两级：**20s 无任何 delta**（连思考都没有，流假活/SSE 空转）→「模型响应超时」，**90s 有思考流但零正文**（思考死循环）→「模型思考时间过长」。**计时必须在流外**——写进 `for try await` 循环体只在有事件时才被检查，流零事件时守卫形同虚设、卡片永远停在 loading（实机验收实证）；睡眠须切片（≤0.25s）以免快速失败要等计时器自然醒才上卡。
+- 思考流展示（2026-09-30）：reasoning delta 经 `InlineThinkFilter` 剥出后**不再丢弃**——`CardState.reasoningText` 节流（0.2s）累加，骨架屏内 `ReasoningPreview` 以固定高 ~3 行尾部滚动区 + 「思考中 · Ns」秒表实时展示；思考即进展，重置「无事件」计时但不重置「纯思考」计时（否则死循环永不超时）。正文到达即随骨架屏收起；思考文本**不入缓存不入历史**（回放卡无此区）；预览文本封顶 4000 字符（只需尾部）。旧口径「reasoning 不计、20s 无正文即超时」已废止——它与混合推理模型的长思考（图上点词实测 4–20s+）直接冲突，是密集页误杀超时的根因。
 - 重试：仅对 429/5xx 自动重试 2 次（1s/3s 指数退避），流已产出内容后不重试（避免重复渲染）。
 - 错误域：`noAPIKey / network(URLError) / http(status, body) / parse / timeout / cancelled`。
 - Provider 预设（`Core/ProviderPresets.swift`，代码内常量而非资源文件）：MiniMax（区域单选：国内 `https://api.minimax.chat` / 国际 `https://api.minimaxi.com`，chat 路径与默认模型 MiniMax-M3 的准确取值**实现期校准**——以 MiniMax 官方 API 文档为准回填）；OpenAI / DeepSeek / 智谱 GLM / Kimi / 自定义（任意 baseURL+path+model）。预设只填默认值，用户可改。
 
-### 4.3 PromptLibrary（全文，PROMPT_VERSION = "m1"）
+### 4.3 PromptLibrary（全文；版本号按 kind 分档，见 `version(for:)`）
 
 输出约定：全部 Markdown。**取数契约**——①查询对象原文（原词/原句）取自输入侧；②来自模型输出的可交互内容（截图「识别内容」、例句、句中难词、难词表词条）按**固定分节标记**提取：模板规定的粗体节名（**识别内容**/**例句**/**句中难词**/**难词表**）即提取锚点，渲染层把流式输出按节切成类型化块（朗读/复制/词条点击交互挂在块上），不做自由 Markdown 事后正则解析（分节提取器有独立测试，§10）。
 
@@ -215,7 +218,12 @@ enum StreamEvent { case reasoningDelta(String); case contentDelta(String); case 
 {忠实转写图中全部可读英文文本，保留原有结构；无文本则描述画面}
 **翻译与解释**
 {中文翻译；若含图表/界面，先说明它展示什么，再解释关键信息}
-**要点**：{2–4 条：生词、术语、值得注意的信息}
+**要点**
+- {2–4 条：生词、术语、值得注意的信息}
+**难词表**
+| 词/短语 | 音标 | 图中义 | 图中原文例句 |
+|---|---|---|---|
+| {3–6 行，按对理解的重要性排序；图中原文例句须与**识别内容**节的转写逐字一致，不新造不改写（防污染传入 word 查询的语境）；例句内含竖线 `\|` 时以 `/` 替代（表格按朴素 `\|` 切分，防单元格错位）；无值得深挖的英文词则整节省略}
 ```
 
 **图上点词（screenshotWordAt）**
@@ -223,6 +231,7 @@ enum StreamEvent { case reasoningDelta(String); case contentDelta(String); case 
 你是 Gloss。用户在截图中点击了坐标（{x}%，{y}%）附近，想查那里的英文单词/短语。
 定位最接近点击处的英文词，按"词"模板结构输出（## 词/音标 → 语境义取它在本图语境中的含义 → 释义 → 搭配 → 例句 → 辨析）。
 若点击处附近没有英文单词：明确说明，并列出图中主要英文词供选择。
+若该位置附近存在多个候选词且无法确定：不要猜测，列出 2–4 个候选并请用户选择。
 ```
 
 **精读（article，M1 文本模式）**：输入按 ~600 词分批。批次模板 = 段模板 + 追加「**本批要点**：2–3 条」与「**本批术语**（若有）：术语/领域/通俗解释」；批次失败：重试尽后标记该批失败并继续后续批次（已成功批可读，失败批可单独重试，product §9）。全部批次完成后发**聚合请求**，入参 = `{逐批要点 + 逐批难词表 + 逐批术语表}`（禁止只喂要点——入参覆盖不了的输出只能靠编造）→ 输出：逻辑解读（主线/论证结构/关键转折/结论/背景）+ 汇总生词表（逐批难词表**去重排序**取 top10–20，例句沿用批内条目不新造）+ 汇总术语表（逐批合并去重）。批次与聚合模板均要求：译文专业术语首次出现处保留英文括注。〔M2 的 pdfPage 模板 = 读图模板 + 文本层参考 + 分 Tab 输出，实现期定稿，缓存键口径一并收口（§4.9）。〕
@@ -233,7 +242,7 @@ enum StreamEvent { case reasoningDelta(String); case contentDelta(String); case 
 
 ### 4.5 PanelController
 
-`NSPanel(contentRect:, styleMask: [.nonactivatingPanel, .titled, .resizable, .fullSizeContentView], backing:, defer:)`；`isFloatingPanel=true`；`collectionBehavior=[.canJoinAllSpaces, .fullScreenAuxiliary]`；`becomesKeyOnlyIfNeeded=true`；内容 = NSHostingView(ResultPanelView)。定位算法按 product-design §4.1（选区 bounds 优先，翻转+钳制）。ESC：面板可见期间以 Carbon `RegisterEventHotKey` 注册 kVK_Escape（消费式、随显隐装拆、无需辅助功能权限）；外部点击：`NSEvent.addGlobalMonitorForEvents`（leftMouseDown 且不在 panel frame 内 → close，鼠标事件无需信任，同样随显隐装拆）。定位二次校正：面板先按鼠标位即时出现，AX 选区 bounds 迟到时（≤150ms）无动画校正一次。Markdown 渲染禁用链接点击（模型输出不可信，OpenURL 置空）。ESC 热键若注册失败（极端占用）则降级为仅外部点击关闭并在设置页提示。
+`NSPanel(contentRect:, styleMask: [.nonactivatingPanel, .titled, .resizable, .fullSizeContentView], backing:, defer:)`；`isFloatingPanel=true`；`collectionBehavior=[.canJoinAllSpaces, .fullScreenAuxiliary]`；`becomesKeyOnlyIfNeeded=true`；内容 = NSHostingView(ResultPanelView)。定位算法按 product-design §4.1（选区 bounds 优先，翻转+钳制）。ESC：面板可见期间以 Carbon `RegisterEventHotKey` 注册 kVK_Escape（消费式、随显隐装拆、无需辅助功能权限）；外部点击：`NSEvent.addGlobalMonitorForEvents`（leftMouseDown 且不在 panel frame 内 → close，鼠标事件无需信任，同样随显隐装拆）。**local monitor 排除图片窗**：图内点击是"连续点词"不是"点浮窗外关窗"，命中 `WindowManager.isImageWindow(ev.window)` 直接放行，否则每次图内点击都会藏一次面板（面板闪隐 + ESC 热键拆装 + 旧流式卡被打成已取消）。定位二次校正：面板先按鼠标位即时出现，AX 选区 bounds 迟到时（≤150ms）无动画校正一次。Markdown 渲染禁用链接点击（模型输出不可信，OpenURL 置空）。ESC 热键若注册失败（极端占用）则降级为仅外部点击关闭并在设置页提示。
 
 ### 4.6 Services 注册（Info.plist 键 + 运行时）
 
@@ -259,7 +268,7 @@ Carbon `RegisterEventHotKey`（⌥D=`kVK_ANSI_D`+optionKey，⌥S=`kVK_ANSI_S`+o
 
 ### 4.9 CacheStore / KeychainStore / SettingsStore / DataStore
 
-- 缓存键 = `sha256(normalizedInput | kind | kindParams | model | PROMPT_VERSION)`；text 输入归一化 = trim + 连续空白折叠为单空格（不改大小写——此规则即 §10 键稳定性测试的判定基准）；image 输入的 normalizedInput = 图像字节 sha256；screenshotWordAt 的 kindParams = 量化到 1% 网格的坐标（防止同图不同点词互相命中错误缓存，也防浮点抖动永不命中）；pdfPage 的缓存键口径（§3.4.3 的"文档 sha256+页码"与本节 image 口径）随 M2 pdfPage 模板定稿一并收口。命中返回完整 Markdown。容量策略：LRU 上限 2000 条或 50MB，启动时清理（依赖 §5 的 lastAccessedAt 字段）。
+- 缓存键 = `sha256(normalizedInput | kind | kindParams | model | version(for: kind) [| ctx:<context 摘要>])`；版本号**按 kind 分档**（`PromptLibrary.version(for:)`：截图整图与图上点词 = `m2`，词/句/段/长文/PDF = `m1`）——改某类 prompt 只失效该类缓存，不牵连其他。`ctx:` 段**仅 word 类且 context 非空时**追加（`cacheNormalized` 归一后取 sha 前 8 位），防同词跨语境命中错结果；text 输入归一化 = trim + 连续空白折叠为单空格（不改大小写——此规则即 §10 键稳定性测试的判定基准）；image 输入的 normalizedInput = 图像字节 sha256；screenshotWordAt 的 kindParams = 量化到 1% 网格的坐标（防止同图不同点词互相命中错误缓存，也防浮点抖动永不命中）；pdfPage 的缓存键口径（§3.4.3 的"文档 sha256+页码"与本节 image 口径）随 M2 pdfPage 模板定稿一并收口。命中返回完整 Markdown。容量策略：LRU 上限 2000 条或 50MB，启动时清理（依赖 §5 的 lastAccessedAt 字段）。
 - KeychainStore：`kSecClassGenericPassword`，service=`com.wuyujun.gloss.llm`，account=presetID+slot；设置页粘贴即写，任何日志/诊断输出对 key 脱敏（只显前 4 后 4）。
 - SettingsStore：UserDefaults 存非敏感项（触发开关/快捷键/音色/语速/多套配置元数据），`LLMConfig` 数组 Codable 序列化存 UserDefaults，apiKey 永不入 UserDefaults。
 - DataStore：SwiftData `ModelContainer`（主上下文 + 后台写入上下文）。
@@ -278,6 +287,16 @@ Carbon `RegisterEventHotKey`（⌥D=`kVK_ANSI_D`+optionKey，⌥S=`kVK_ANSI_S`+o
 - **状态回显**：Sparkle 的 `automaticallyChecksForUpdates` / `lastUpdateCheckDate` 是 ObjC 属性，SwiftUI 不自动观察 KVO；设置页须在 `onAppear` 与低频定时器中主动同步，否则开关与时间戳会停留在窗口创建那一刻的旧值（实测：权限询问框点了「自动检查」，UI 仍显示未勾选）。
 - **Info.plist**：`SUFeedURL` = `$(SPARKLE_FEED_URL)`（仅 Release 配置注入，Debug 不设 → 更新功能自然禁用，避免开发中误把 Debug 实例替换成 Release 包）、`SUPublicEDKey`（EdDSA 公钥）。刻意不设 `SUAllowsAutomaticUpdates`（Sparkle 缺省跟随自动检查开关，官方亦不建议显式设置）。
 - **更新通道**：静态 appcast `releases/latest/download/appcast.xml`（GitHub 固定 302 到最新 Release 资产，零自建后端；走静态文件而非 REST API，无未认证限流）。已知限制：国内访问 GitHub 不稳，检查失败静默、菜单栏另设「前往下载页…」兜底；GitHub `/releases/latest/` 重定向有 2~3 分钟 CDN 传播延迟，传播期内旧版客户端会看到"已是最新"。
+
+### 4.12 图片放大窗（WindowManager.showImage / ImageZoomWindow）
+
+- **定位**：密集截图的正文在 160pt 缩略图里物理不可读（13px 渲染后 ≈2.1px），点击即盲指。缩略图按原图自然宽度与卡片实测可用宽分流（`ImageGeometry.needsZoomWindow(imageWidth:cardWidth:)`，卡宽取 `geo.size.width`；当前面板内容宽被 `.frame(width: 400)` 钉死故实测恒为 376）：≤ 卡片可用宽就地点词（保留现状），宽于它则开独立放大窗。历史回放卡只有 ≤200px 缩略图 → 恒不就地点大窗（放大只会糊）。
+- **窗口**：复用 `WindowManager.makeWindow(title:size:)` 工厂与精读窗同一套模式（`.titled, .closable, .miniaturizable, .resizable` → 自带最大化/拖拽调窗）；打开走 `activate()` + `makeKeyAndOrderFront`；默认 1000×700；每次装全新 `NSHostingView`（同 `showReader`：复用 hosting view 换 rootView 不触发 `onAppear`）。`windowWillClose` 补 `imageWindow` 分支，**只置空引用**——窗内无可取消任务（点词请求归 `SessionCoordinator`），勿照抄 reader 的 VM cancel。
+- **fit 满窗是坐标换算的前提（勿破坏）**：图片恒 `scaledToFit` 铺满内容区，**不加 ScrollView / magnification / 缩放手势**；放大手段就是拉大窗口。一旦引入滚动或缩放，`ImageGeometry.normalizedPoint` 的公式必须叠加滚动偏移与缩放因子。
+- **坐标换算两段契约**：①`ImageGeometry.normalizedPoint(viewSize:imagePixelSize:click:)`（视图局部 y 向下，落在 fit 后的空白处返回 nil）出 0…1 归一化点，与缩略图共用同一纯函数；②`clickRect` 必须是 **Cocoa 全局屏幕坐标**（y 向上、多屏各自 frame，`PanelController.positionBySelection` 的既有契约），换算路径钉死为 `NSView.convert(_:to: nil)` → `NSWindow.convertToScreen(_)`，由系统按所在屏换算——**禁止手搓 `NSScreen.main.frame.height - y` 单屏翻转公式**（仅主屏正上方布局时偶然成立，多屏即错）。故图片显示区用 `NSViewRepresentable` 承载真实 `NSView`，准星与坐标读数在 SwiftUI 侧叠加（`allowsHitTesting(false)`，不参与布局也不吃事件）。
+- **生命周期绑定栈根会话**：`SessionCoordinator` 的栈根赋值收口在唯一私有入口 `setRoot(card:)`，置新根前 `closeImageWindow()`（orderOut + 置空）——否则旧图点词卡会压在新根上（跨会话混栈），换根为文本卡后窗内点击又是静默死路。栈顶替换（D-e）：栈首仍是截图卡时，第 2 次点击先 `removeLast()` 再 push，深度仍 ≤2，「← 返回整图」语义不变。
+- **结果面板去向**：点击源在另一个窗口，`pushWordAtQuery` 追加后**条件式**置前（`if !PanelController.shared.isVisible { show(near: clickRect) }`）——就地路径面板必可见故不重定位（现状行为完全保留）；图片窗路径面板被藏时复活并就近浮出。`show(near:)` 内部 `orderFrontRegardless()` 不抢焦点，用户可点回图片窗继续点下一个词。
+- **ESC 两级**：面板可见期间 ESC 已被 Carbon 热键消费为「藏面板」，不会到达图片窗；面板隐藏后再按 ESC 才关图片窗（`ImageZoomView` 的 NSView 接管 first responder + `keyDown`）。
 
 ## 5. 数据模型（SwiftData，schema v1）
 
@@ -344,11 +363,12 @@ ChatMessage.images 非空时 content 组数组（text part 永远在前——先
 swiftc -O -o /tmp/selfcheck \
   Gloss/Core/QueryRouter.swift Gloss/Core/SSEParser.swift Gloss/Core/SectionExtractor.swift \
   Gloss/Core/PromptLibrary.swift Gloss/Core/LLMClient.swift Gloss/Core/CacheStore.swift \
-  Gloss/Core/ImagePipeline.swift Gloss/Core/GlossLog.swift SelfCheck/main.swift && /tmp/selfcheck
+  Gloss/Core/ImagePipeline.swift Gloss/Core/ImageGeometry.swift Gloss/Core/GlossLog.swift \
+  SelfCheck/main.swift && /tmp/selfcheck
 ```
 
-当前 **68 项断言全绿**（2026-09-29 实测）。覆盖：QueryRouter 表驱动（≤3 词/连字符词/带撇词/句末标点/60 词边界/400 词边界/CJK 占比/空输入/纯数字）；SSEParser fixture 流（普通 delta、reasoning_content、`[DONE]`、chunk 中途截断的 `data:` 行拼接、多 choice 取 [0]）；分节提取器边界（节缺失/空节/流式半节）；PromptLibrary 模板渲染；CacheStore 键稳定性与 LRU；ImagePipeline 归一化字节级确定性。
-未覆盖（需手工/集成验证）：LLMClient 的 HTTP 行为（200 流式/401/429 重试/超时取消）尚无 URLProtocol mock；更新链路以「本地 feed E2E + 真实发布包升级演示」验证（见 §4.11）。
+当前 **88 项断言全绿**（2026-09-30 实测；两级超时重构合并了旧守卫断言）。覆盖：QueryRouter 表驱动（≤3 词/连字符词/带撇词/句末标点/60 词边界/400 词边界/CJK 占比/空输入/纯数字）；SSEParser fixture 流（普通 delta、reasoning_content、`[DONE]`、chunk 中途截断的 `data:` 行拼接、多 choice 取 [0]）；分节提取器边界（节缺失/空节/流式半节/截图难词表与旧缓存无表兼容）；PromptLibrary 模板渲染（含截图难词表与点词多候选约束）；CacheStore 键稳定性（分 kind 版本、context 入键与归一、非 word 类不入键）与 LRU；ImageGeometry 归一化坐标换算（中心点 + letterbox 拒绝）；ImagePipeline 归一化字节级确定性；VisibleIdleMonitor 流外两级空闲超时（零事件 .noEvent / 思考死循环 .thinkingOnly / finish 切片打断 / 正文与思考的重置语义分野）。
+未覆盖（需手工/集成验证）：LLMClient 的 HTTP 行为（200 流式/401/429 重试/超时取消）尚无 URLProtocol mock；AppKit 层的栈顶替换（D-e）、换根关窗（D-f）、monitor 排除、条件式置前由实机验收覆盖（方案 §10 验收 5/6/8/10）；更新链路以「本地 feed E2E + 真实发布包升级演示」验证（见 §4.11）。
 
 **手工验收矩阵（M1 发布前）**：通道（服务/⌥D/⌥S）× 目标 App（Safari、Chrome、微信、Preview 文本型 PDF、Terminal、VS Code）× 预期（取词成功或降级提示正确）；权限三态（未授权/授权后/重签后失效）；ESC/外点/固定；缓存徽标与重查。
 

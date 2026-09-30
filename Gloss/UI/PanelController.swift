@@ -83,13 +83,23 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     func resizeToContent() {
-        guard let panel, let hv = hostingView, panel.isVisible else { return }
-        let ideal = hv.fittingSize.height
-        let h = max(120, min(maxContentHeight, ideal))
-        let old = panel.frame.height
-        guard abs(h - old) > 1 else { return }
+        guard let panel, panel.isVisible else { return }
+        applyHeight(panel)
+        // 切卡（返回/换卡）时本轮 SwiftUI 布局尚未完成，fittingSize 可能读到上一张卡的中间值而算出
+        // 偏小高度，且此后 revision 不再变化、不会自愈（实机验收实证：点 chips 进词卡再返回，卡停在
+        // 120pt 下限、正文被压扁）。下一轮 runloop 布局完成后再量一次即可收敛。
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.panel?.isVisible == true else { return }
+            self.applyHeight(panel)
+        }
+    }
+
+    private func applyHeight(_ panel: NSPanel) {
+        guard let hv = hostingView else { return }
+        let h = max(120, min(maxContentHeight, hv.fittingSize.height))
+        guard abs(h - panel.frame.height) > 1 else { return }
         var f = panel.frame
-        let dy = h - old
+        let dy = h - panel.frame.height
         if anchoredTop { f.origin.y -= dy }
         f.size.height = h
         isProgrammaticMove = true
@@ -195,6 +205,9 @@ final class PanelController: NSObject, NSWindowDelegate {
             MainActor.assumeIsolated {
                 guard let self, let panel = self.panel, panel.isVisible else { return ev }
                 if SessionCoordinator.shared.pinned { return ev }
+                // 图片窗内的点击是「连续点词」，不是「点浮窗外关窗」——排除掉，否则每次图内点击
+                // 都会藏面板一次（面板闪隐 + ESC 热键拆装 + 旧流式卡被打成已取消）
+                if WindowManager.shared.isImageWindow(ev.window) { return ev }
                 if !panel.frame.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation) {
                     self.hide()
                 }

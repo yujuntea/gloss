@@ -93,13 +93,63 @@ check("prompt.paragraph.exampleCol", PromptLibrary.userPrompt(kind: .paragraph, 
 let pointPrompt = PromptLibrary.userPrompt(kind: .screenshotWordAt, text: "", context: nil, point: CGPoint(x: 0.3, y: 0.5))
 check("prompt.image.point", pointPrompt.contains("（30%，50%）"), pointPrompt)
 check("prompt.image.explain", PromptLibrary.userPrompt(kind: .screenshotExplain, text: "", context: nil).contains("识别内容"))
+// 截图卡 chips 契约：难词表节名 + 4 列表头 + 竖线护栏（表格按朴素 | 切分，例句含竖线会错位）
+let shotPrompt = PromptLibrary.userPrompt(kind: .screenshotExplain, text: "", context: nil)
+check("prompt.screenshotHardWords",
+      shotPrompt.contains("**难词表**") && shotPrompt.contains("| 词/短语 | 音标 | 图中义 | 图中原文例句 |")
+      && shotPrompt.contains("\\|") && shotPrompt.contains("逐字一致") && shotPrompt.contains("整节省略"),
+      shotPrompt)
+check("prompt.screenshotWordAtCandidates",
+      PromptLibrary.userPrompt(kind: .screenshotWordAt, text: "", context: nil, point: CGPoint(x: 0.3, y: 0.5))
+        .contains("2–4 个候选"), "方案 C：多候选不得编造单个答案")
 
 let longText = Array(repeating: String(repeating: "lorem ipsum dolor sit amet ", count: 8), count: 25).joined(separator: "\n\n")
 let batches = PromptLibrary.splitBatches(longText)
 check("prompt.batches.multi", batches.count >= 2, "count=\(batches.count)")
 check("prompt.batch.prompt", PromptLibrary.articleBatchPrompt(text: "X", index: 1, total: 2).contains("本批术语"))
 check("prompt.aggregate", PromptLibrary.aggregatePrompt(batchMaterials: "M").contains("去重合并"))
-check("prompt.version", PromptLibrary.version == "m1")
+check("prompt.versionPerKind",
+      PromptLibrary.version(for: .screenshotExplain) == "m2" && PromptLibrary.version(for: .screenshotWordAt) == "m2"
+      && PromptLibrary.version(for: .word) == "m1" && PromptLibrary.version(for: .sentence) == "m1"
+      && PromptLibrary.version(for: .paragraph) == "m1")
+check("prompt.versionForWordUnchanged", PromptLibrary.version(for: .word) == "m1")
+
+// MARK: - 截图卡难词表（§3.1）：读图输出与段落卡同构，chips 直接吃同一套 SectionExtractor 契约
+
+let shotMarkdown = """
+**识别内容**
+Idempotent operations and leader election.
+**翻译与解释**
+幂等操作与领导者选举。
+**要点**
+- 分布式一致性
+**难词表**
+| 词/短语 | 音标 | 图中义 | 图中原文例句 |
+|---|---|---|---|
+| idempotent | /ˌaɪdemˈpɒɪtənt/ | 幂等的 | Idempotent operations |
+| quorum | /ˈkwɔːrəm/ | 法定人数 | quorum reads |
+"""
+let shotSec = SectionExtractor.section(named: "难词表", in: shotMarkdown)
+check("section.screenshotWords", shotSec?.contains("quorum") == true, "含难词表节的截图 markdown 应能取出该节")
+let shotRows = Array(SectionExtractor.tableRows(shotSec ?? "").dropFirst())
+check("section.screenshotTableRows", shotRows.count == 2 && shotRows[0].count == 4
+      && shotRows[0][3] == "Idempotent operations" && !shotRows.contains { $0.contains("---") },
+      "rows=\(shotRows)")
+let shotRemoved = SectionExtractor.removingSection(named: "难词表", in: shotMarkdown)
+check("section.screenshotRemoved",
+      !shotRemoved.contains("quorum") && !shotRemoved.contains("**难词表**")
+      && shotRemoved.contains("**识别内容**") && shotRemoved.contains("幂等操作与领导者选举"),
+      "移除难词表后正文不得含该节且不丢其他节：\(shotRemoved)")
+let noTableMarkdown = """
+**识别内容**
+Plain UI text.
+**要点**
+- 界面截图
+"""
+check("section.noWordTableIsNoop",
+      SectionExtractor.section(named: "难词表", in: noTableMarkdown) == nil
+      && SectionExtractor.removingSection(named: "难词表", in: noTableMarkdown) == noTableMarkdown,
+      "无难词表时（模型漏发/老缓存）应原样返回")
 
 // MARK: - CacheStore
 
@@ -114,6 +164,37 @@ check("cache.key.stable", k1 == k2)
 check("cache.kind.changesKey", k1 != k3)
 check("cache.point.changesKey", k4 != k5)
 check("cache.point.quantized", k4 == k6, "1% 网格内量化应同键")
+// 语境入键（§6.1 D-b）：同词不同语境必须分键，否则命中的是别的语境的语境义
+let ctxA = CacheStore.makeKey(normalizedInput: "operation", kind: .word, params: nil, model: "m", context: "ctx A")
+let ctxB = CacheStore.makeKey(normalizedInput: "operation", kind: .word, params: nil, model: "m", context: "ctx B")
+let ctxNone = CacheStore.makeKey(normalizedInput: "operation", kind: .word, params: nil, model: "m")
+let ctxEmpty = CacheStore.makeKey(normalizedInput: "operation", kind: .word, params: nil, model: "m", context: "")
+let ctxPadded = CacheStore.makeKey(normalizedInput: "operation", kind: .word, params: nil, model: "m", context: "  ctx  A  ")
+// nil/空串 context 必须与 6.1 之前的键完全一致（无 "|ctx:" 段）——词类老缓存不得失效
+let noCtxPayload = glossSHA256("operation|word|m|m1")
+check("cachekey.wordContextDiffers", ctxA != ctxB && ctxNone == noCtxPayload && ctxEmpty == ctxNone, "ctxA=\(ctxA) ctxNone=\(ctxNone)")
+check("cachekey.wordContextNormalized", ctxPadded == ctxA, "ctx 空白变体应归一后同键")
+let sentCtxA = CacheStore.makeKey(normalizedInput: "A sentence.", kind: .sentence, params: nil, model: "m", context: "ctx A")
+let sentCtxB = CacheStore.makeKey(normalizedInput: "A sentence.", kind: .sentence, params: nil, model: "m", context: "ctx B")
+check("cachekey.contextIgnoredForNonWord", sentCtxA == sentCtxB, "§6.1 限 .word，句卡 context 不入键")
+let shotKey = CacheStore.makeKey(normalizedInput: "imgsha", kind: .screenshotExplain, params: nil, model: "m")
+let wordKeySameInput = CacheStore.makeKey(normalizedInput: "imgsha", kind: .word, params: nil, model: "m")
+// 字节级锚定：与「仍用全局 m1 常量」的旧键逐字节比对，证明截图两类真的随版本失效、词类真的没失效
+let shotKeyIfStillM1 = glossSHA256("imgsha|screenshotExplain|m|m1")
+let wordAtKeyIfStillM1 = glossSHA256("imgsha|screenshotWordAt|m|m1")
+let wordKeyIfStillM1 = glossSHA256("imgsha|word|m|m1")
+let wordAtKey = CacheStore.makeKey(normalizedInput: "imgsha", kind: .screenshotWordAt,
+                                   params: KindParams(point: CGPoint(x: 0.3, y: 0.5), pageIndex: nil), model: "m")
+check("cachekey.screenshotVersionBumped",
+      shotKey != wordKeySameInput && PromptLibrary.version(for: .screenshotExplain) == "m2"
+      && PromptLibrary.version(for: .screenshotWordAt) == "m2", "截图两类键随版本变化，词类保持 m1")
+check("cachekey.screenshotKeyDiffersFromM1",
+      shotKey != shotKeyIfStillM1
+      && wordAtKey == glossSHA256("imgsha|screenshotWordAt|m|m2|pt:30,50"),
+      "整图/点词键确已从 m1 payload 迁到 m2（D-d：否则老缓存复活旧 prompt 的单猜行为）")
+check("cachekey.wordKeyUnchangedByVersionSplit",
+      wordKeySameInput == wordKeyIfStillM1,
+      "词类键必须与旧版逐字节一致（分版本不得误伤词/句/段缓存）")
 store.put(k1, "resp1")
 check("cache.hit", store.get(k1) == "resp1")
 check("cache.miss", store.get(k3) == nil)
@@ -193,6 +274,87 @@ var tf4 = InlineThinkFilter()
 let r4a = tf4.feed("开头<think>思考")
 let r4b = tf4.feed("</think>结尾")
 check("think.normalFlow", r4a.content == "开头" && r4b.content == "结尾" && r4a.reasoning + r4b.reasoning == "思考")
+
+// MARK: - VisibleIdleMonitor（流外两级空闲计时，2026-09-29 加入 / 09-30 拆两级）
+
+// ① 零事件流必须自行到期，且原因=.noEvent——2026-09-29 实机验收实证：
+//    守卫若只在 `for try await` 循环体内判，流零事件时循环体一次都不执行，卡片永远 loading
+let m1 = VisibleIdleMonitor(eventLimit: 0.3, thinkingLimit: 10)
+let m1Start = Date()
+let m1Timeout = await m1.waitForTimeout()
+check("guard.monitor.zeroEventTimesOutWithReason", m1Timeout == .noEvent && Date().timeIntervalSince(m1Start) < 2,
+      "无任何事件时应以 .noEvent 到期（实测 \(String(describing: m1Timeout))，耗时 \(String(format: "%.2f", Date().timeIntervalSince(m1Start)))s）")
+
+// finish() 解除 + 切片化：finish 必须能**打断**长睡眠，否则快速失败（断网/401/重试尽）
+// 要等计时器自然醒才上卡，界面假 loading 最长达 eventLimit（2026-09-29 复审实证的回归防护）
+let m2 = VisibleIdleMonitor(eventLimit: 30, thinkingLimit: 30)
+Task { try? await Task.sleep(nanoseconds: 50_000_000); m2.finish() }
+let m2Start = Date()
+let m2Timeout = await m2.waitForTimeout()
+let m2Elapsed = Date().timeIntervalSince(m2Start)
+check("guard.monitor.finishInterruptsLongSleep", m2Timeout == nil && m2Elapsed < 2.0,
+      "limit=30s 下 finish() 应在切片粒度内（<2s）返回 nil，实测 \(String(format: "%.2f", m2Elapsed))s")
+
+// markVisible（正文）重置两级计时：重置生效时第二次到期 = markVisible 时刻 + limit（0.15+0.4=0.55s），
+// 被变异杀掉（正文不重置时钟）则 0.40s 提前到期——用**总耗时**下界 0.47s 区分两种情形。
+// 调度容差：markVisible 睡眠超调需 >0.25s 才会误伤正确实现（K3 终审指出 0.12s/0.25s 参数下
+// 超调 >0.13s 即反向 flake，本组参数把容差翻倍）
+let m3 = VisibleIdleMonitor(eventLimit: 0.4, thinkingLimit: 0.4)
+let m3Start = Date()
+Task { try? await Task.sleep(nanoseconds: 150_000_000); m3.markVisible() }
+let m3Timeout = await m3.waitForTimeout()
+let m3Idle = m3.eventIdleSeconds()
+let m3Elapsed = Date().timeIntervalSince(m3Start)
+check("guard.monitor.markVisibleResets",
+      m3Timeout == .noEvent && m3Idle < 0.4 + 0.15 && m3Elapsed > 0.47,
+      "到期以 .noEvent、idle≈一个 limit，且总耗时 >0.47s（重置生效 0.15+0.4≈0.55s；被杀则 0.40s 提前到期），实测 \(String(describing: m3Timeout)) / idle \(String(format: "%.3f", m3Idle))s / 总 \(String(format: "%.3f", m3Elapsed))s")
+
+// 关键新语义（2026-09-30）：思考 delta 重置①（无事件）但不重置②（纯思考）——
+// 长思考不再被「20s 无正文」误杀；思考死循环仍会被 90s 兜底拦下
+let m4 = VisibleIdleMonitor(eventLimit: 0.2, thinkingLimit: 0.6)
+Task {
+    for _ in 0..<3 {
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        m4.markEvent()
+    }
+}
+let m4Start = Date()
+let m4Timeout = await m4.waitForTimeout()
+let m4Elapsed = Date().timeIntervalSince(m4Start)
+check("guard.monitor.reasoningPreventsNoEventButThinkingExpires",
+      m4Timeout == .thinkingOnly && m4Elapsed >= 0.55,
+      "持续思考流应把到期原因从 .noEvent 推迟为 .thinkingOnly（实测 \(String(describing: m4Timeout))，耗时 \(String(format: "%.2f", m4Elapsed))s）")
+
+// 构造参数与生产口径一致
+check("guard.monitor.limitsSane",
+      VisibleIdleMonitor.eventLimit == 20 && VisibleIdleMonitor.thinkingLimit == 90
+      && VisibleIdleMonitor.finishPollInterval > 0 && VisibleIdleMonitor.finishPollInterval <= 1.0,
+      "①=20s / ②=90s / 切片 ≤1s（过细则忙等，过粗则 finish 感知迟）")
+
+// 思考超时的错误文案独立于「模型响应超时」，用户能分辨两种失败
+check("fix.errorDesc.thinkingTimeout", AppError.thinkingTimeout.errorDescription?.contains("思考") == true,
+      "\(AppError.thinkingTimeout.errorDescription ?? "nil")")
+
+// MARK: - ImageGeometry（fit 满窗的点击坐标换算，§4.4）
+
+let thumbView = CGSize(width: 376, height: 160)
+let thumbImg = CGSize(width: 1512, height: 982)
+let thumbCenter = ImageGeometry.normalizedPoint(viewSize: thumbView, imagePixelSize: thumbImg, click: CGPoint(x: 188, y: 80))
+let thumbLetterbox = ImageGeometry.normalizedPoint(viewSize: thumbView, imagePixelSize: thumbImg, click: CGPoint(x: 1, y: 1))
+check("geo.normalizedPoint",
+      thumbCenter.map { abs($0.x - 0.5) < 0.01 && abs($0.y - 0.5) < 0.01 } == true && thumbLetterbox == nil,
+      "center=\(String(describing: thumbCenter)) letterbox=\(String(describing: thumbLetterbox))")
+// 分流阈值（§4.5）：密集截图要弹窗、能卡内看清的图与历史缩略图不弹窗；面板可拉宽故按实测卡宽判
+check("geo.needsZoomWindow.denseScreenshot",
+      ImageGeometry.needsZoomWindow(imageWidth: 1512, cardWidth: 376),
+      "1512 宽全屏截图在 376 卡宽下正文不可读，应开放大窗")
+check("geo.needsZoomWindow.smallImage",
+      !ImageGeometry.needsZoomWindow(imageWidth: 200, cardWidth: 376)
+      && !ImageGeometry.needsZoomWindow(imageWidth: 300, cardWidth: 600),
+      "≤卡宽的图（含历史 200px 缩略图）走就地点词；拉宽面板后 300 宽图不该再弹窗")
+check("geo.needsZoomWindow.exactFit",
+      !ImageGeometry.needsZoomWindow(imageWidth: 376, cardWidth: 376),
+      "自然宽恰等于卡宽时可卡内就地点词，不应弹窗")
 
 // MARK: - 汇总
 

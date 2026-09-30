@@ -24,12 +24,103 @@ enum StreamEvent {
     case done
 }
 
+/// 流式空闲超时的原因（两级口径，见 VisibleIdleMonitor）
+enum VisibleIdleTimeout {
+    /// 超过 eventLimit 无**任何** delta（连思考都没有）：流假活/SSE 空转/连接半死
+    case noEvent
+    /// 持续有思考 delta 但超过 thinkingLimit 零正文：模型思考死循环
+    case thinkingOnly
+}
+
+/// 流外空闲计时器（与流消费 `async let` 竞速），两级超时口径：
+///
+/// ① `eventLimit`（20s）无任何 delta——网络超时管不住「连接活着但一个事件都不发」的假活流；
+/// ② `thinkingLimit`（90s）持续有思考流但零正文——思考死循环兜底。
+///
+/// 思考流**展示给用户**（ReasoningPreview）后即为进展，故 reasoning delta 视作事件、
+/// 重置①；但它不是内容，不重置②——否则「只思考不出字」的流永远不会被拦下
+/// （2026-09-29 实测图上点词纯思考 4–14s、密集页 20s+，旧「20s 无正文即超时」口径会误杀长思考）。
+///
+/// 为什么计时必须在 `for try await` 循环体**外**（2026-09-29 实机验收实证）：
+/// 循环体内判超时只在有事件到达时才被检查，模型建连后零事件时循环体一次都不执行，
+/// 守卫形同虚设，卡片永远停在 loading 且不报错。
+///
+/// 线程安全：`mark*` 由消费协程调、`waitForTimeout` 由计时协程调，NSLock 保护时间戳。
+final class VisibleIdleMonitor: @unchecked Sendable {
+    /// ①上限：无任何事件
+    static let eventLimit: TimeInterval = 20
+    /// ②上限：有事件但零正文（纯思考）
+    static let thinkingLimit: TimeInterval = 90
+    /// 解除计时的轮询粒度：决定 `finish()` 后最迟多久被感知（同时决定忙等粒度）
+    static let finishPollInterval: TimeInterval = 0.25
+
+    private let eventLimit: TimeInterval
+    private let thinkingLimit: TimeInterval
+    private let lock = NSLock()
+    private var lastEventAt = Date()
+    private var lastContentAt = Date()
+    private var cancelled = false
+
+    init(eventLimit: TimeInterval = VisibleIdleMonitor.eventLimit,
+         thinkingLimit: TimeInterval = VisibleIdleMonitor.thinkingLimit) {
+        self.eventLimit = eventLimit
+        self.thinkingLimit = thinkingLimit
+    }
+
+    /// 收到思考 delta：证明流活着（重置①），但用户还没拿到内容（不重置②）
+    func markEvent() {
+        lock.lock(); defer { lock.unlock() }
+        lastEventAt = Date()
+    }
+
+    /// 收到正文：两级计时都重置
+    func markVisible() {
+        lock.lock(); defer { lock.unlock() }
+        lastEventAt = Date()
+        lastContentAt = Date()
+    }
+
+    /// 消费结束（流已终止）后调用，解除计时器
+    func finish() {
+        lock.lock(); defer { lock.unlock() }
+        cancelled = true
+    }
+
+    /// 距上次任意事件的秒数（诊断用）
+    func eventIdleSeconds() -> TimeInterval {
+        lock.lock(); defer { lock.unlock() }
+        return Date().timeIntervalSince(lastEventAt)
+    }
+
+    /// 挂起直到两级超时之一触发（返回原因）；`finish()` 后返回 nil。
+    ///
+    /// 睡眠**必须切片**（≤ `finishPollInterval`）：父协程先等本方法返回，若单次睡满整个剩余时长，
+    /// 则 `finish()` 无法打断——断网/401/重试尽后的错误要等计时器自然醒才上卡，界面假 loading 最长
+    /// 达 eventLimit，是相对「错误即时上卡」的回归（2026-09-29 复审实证）。
+    func waitForTimeout() async -> VisibleIdleTimeout? {
+        while true {
+            let (isDone, eventRemaining, thinkingRemaining): (Bool, TimeInterval, TimeInterval) = lock.withLock {
+                let now = Date()
+                return (cancelled,
+                        eventLimit - now.timeIntervalSince(lastEventAt),
+                        thinkingLimit - now.timeIntervalSince(lastContentAt))
+            }
+            if isDone { return nil }
+            if eventRemaining <= 0 { return .noEvent }
+            if thinkingRemaining <= 0 { return .thinkingOnly }
+            let slice = min(min(eventRemaining, thinkingRemaining), Self.finishPollInterval)
+            try? await Task.sleep(nanoseconds: UInt64(slice * 1_000_000_000))
+        }
+    }
+}
+
 enum AppError: Error, LocalizedError {
     case noAPIKey
     case network(String)
     case http(Int, String)
     case parse(String)
     case timeout
+    case thinkingTimeout
     case cancelled
 
     var errorDescription: String? {
@@ -44,6 +135,7 @@ enum AppError: Error, LocalizedError {
             }
         case .parse: return "响应解析失败"
         case .timeout: return "模型响应超时"
+        case .thinkingTimeout: return "模型思考时间过长，请重试"
         case .cancelled: return "已取消"
         }
     }

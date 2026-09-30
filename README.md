@@ -88,7 +88,7 @@ open Gloss.xcodeproj   # Xcode 16+，直接 Cmd+R 运行
 ```
 
 - 系统框架为主（AppKit / SwiftUI / SwiftData / PDFKit / AVFoundation / Carbon / Vision-free），唯一第三方依赖为 [Sparkle](https://github.com/sparkle-project/Sparkle) 2.10+（更新框架，SPM 拉取）
-- 逻辑自检：`SelfCheck/main.swift` 与核心纯逻辑文件联合编译即可运行（路由/SSE/分节提取/缓存键/图像管线共 68 项断言）
+- 逻辑自检：`SelfCheck/main.swift` 与核心纯逻辑文件联合编译即可运行（路由/SSE/分节提取/缓存键/坐标换算/图像管线/流式超时守卫共 88 项断言）
 - 签名：使用 Xcode 自动签名或本地自签证书均可；功能不依赖特定签名。**注意**：自动更新链锚定发布方的 EdDSA 密钥对——自编译版本会正常接受官方更新包并覆盖本地产物，请按需忽略更新提示或从 Releases 手动安装；发布方更换/丢失 EdDSA 私钥才会使老用户的自动更新断链
 - 规范打包发布：`scripts/release.sh` 一条命令完成 Release 构建 → 签名验证 → ditto 打 zip → 生成 Sparkle 更新描述（`dist/appcast.xml`，`sign_update` EdDSA 签名，自动剥离 markdown 标记）；加 `--publish` 再创建 GitHub Release 并上传 zip 与 appcast，App 端即收到更新提醒
 - 发版流程：版本号唯一来源是 pbxproj 的 `MARKETING_VERSION` 与 `CURRENT_PROJECT_VERSION`（Info.plist 经 `$(VAR)` 注入），两者**同步递增**后跑 `--publish` 即可；脚本内置三道发布闸——工作区须干净且已推送、build 号须大于线上 latest、重复发布拦截

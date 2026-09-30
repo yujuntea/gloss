@@ -161,12 +161,48 @@ section{position:relative}
 .reader-url{flex:1;text-align:center;font-size:.7rem;color:var(--ink-3);font-family:var(--mono);
   background:rgba(255,255,255,.05);border-radius:6px;padding:3px 10px;max-width:280px;margin:0 auto;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* hero trigger switcher: ⌥D 划词 | ⌥S 截图 */
+.mode-sw{display:flex;gap:2px;padding:2px;border-radius:8px;background:rgba(255,255,255,.07);
+  border:1px solid var(--line);flex:none}
+.mode-btn{padding:3px 9px;border-radius:6px;font-size:.68rem;color:var(--ink-3);white-space:nowrap;
+  transition:all .22s;font-weight:520;line-height:1.5}
+.mode-btn:hover{color:var(--ink)}
+.mode-btn.on{background:linear-gradient(140deg,var(--teal),var(--teal-2));color:#04201E;font-weight:640}
+.mode-btn:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+@media(max-width:520px){.reader-url{display:none}}
+
+/* ⌥S selection overlay inside the hero canvas */
+.hero-sel{position:absolute;border:1.5px dashed var(--teal);background:rgba(79,209,197,.1);
+  pointer-events:none;opacity:0;z-index:3;border-radius:2px}
+.hero-sel.run{animation:selDrag 1.4s cubic-bezier(.45,0,.55,1) forwards}
+.hero-sel::before,.hero-sel::after{content:"";position:absolute;width:7px;height:7px;
+  background:var(--teal);border-radius:2px;box-shadow:0 0 0 2px rgba(8,9,12,.5)}
+.hero-sel::before{top:-4px;left:-4px}
+.hero-sel::after{bottom:-4px;right:-4px}
+
+/* seg 读图 only in ⌥S mode */
+.seg .seg-shot{display:none}
+.sim-shot .seg span:not(.seg-shot){display:none}
+.sim-shot .seg .seg-shot{display:block}
+
+/* compact screenshot card used in the hero
+   忠实还原 App 行为：卡片顶部是「原始截图」，不预抽词、不标词；
+   点图上任意位置 → 十字准星标记 → 把原图+归一化坐标发给模型。 */
+.shot-thumb{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line-2);
+  margin-bottom:12px;background:#0C0F14}
+.shot-thumb-plain .shot-thumb-lbl{pointer-events:none}
+.shot-thumb-lbl{position:absolute;left:0;right:0;top:0;z-index:2;padding:4px 8px;font-size:.62rem;
+  color:var(--ink-3);font-family:var(--mono);background:linear-gradient(180deg,rgba(8,9,12,.92),transparent)}
+.shot-thumb-img{position:relative;padding:22px 12px 12px;font-family:var(--mono);font-size:.66rem;
+  line-height:1.75;color:#AEB6C2;min-height:104px;user-select:none}
+.shot-thumb-img em{font-style:normal;color:#C9D1DC}
 .reader-body{padding:22px 24px 24px;font-size:.885rem;line-height:1.85;color:#C9D0DA;position:relative;min-height:430px;
   transition:opacity .3s,filter .3s}
 .reader-body.dim{pointer-events:none}
 /* 按段落调暗：选中词所在段落保持可读（贴近真实 App 不变暗的行为），
    钉住的 ⌥D 徽章也随之可见；卡片开着时其他词仍可直接点击切换 */
-.reader-body.dim > *{opacity:.16;filter:blur(1.5px)}
+.reader-body.dim > *:not(.hero-sel){opacity:.16;filter:blur(1.5px)}
 .reader-body.dim p:has(.tok.sel){opacity:1;filter:none}
 .reader-body.dim .tok{pointer-events:auto}
 /* 调暗段落里的"幽灵词"可点但抑制 hover 高亮/徽章，避免明暗反差突兀 */
@@ -349,14 +385,13 @@ kbd{font-family:var(--mono);font-size:.72em;padding:2px 6px;border-radius:5px;ba
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .sr-inner{padding:18px 22px 20px}
 .sr-thumb{position:relative;border-radius:9px;overflow:hidden;border:1px solid var(--line-2);margin-bottom:15px;
-  min-height:92px;padding:11px 13px;cursor:crosshair;display:flex;flex-direction:column;gap:9px;
-  background:linear-gradient(135deg,rgba(167,139,250,.1),rgba(79,209,197,.07))}
-.sr-thumb-lbl{font-size:.68rem;color:var(--ink-3);font-family:var(--mono);line-height:1.5}
-.sr-words{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
-.sr-thumb .word{position:static;font-family:var(--mono);font-size:.7rem;color:#C4B5FD;padding:3px 7px;border-radius:5px;
-  transition:all .2s;background:rgba(167,139,250,.14);cursor:pointer;white-space:nowrap}
-.sr-thumb .word:hover{background:var(--teal);color:#04201E;transform:translateY(-1px)}
-.sr-thumb .word.picked{background:var(--teal);color:#04201E;box-shadow:0 0 0 3px rgba(79,209,197,.25)}
+  background:#0C0F14;cursor:crosshair}
+.sr-thumb-lbl{position:absolute;left:0;right:0;top:0;z-index:2;padding:4px 9px;font-size:.64rem;
+  color:var(--ink-3);font-family:var(--mono);background:linear-gradient(180deg,rgba(8,9,12,.92),transparent)}
+.sr-mini{position:relative;padding:24px 12px 12px;display:flex;flex-direction:column;gap:3px;
+  min-height:96px;user-select:none}
+.sr-line{font-family:var(--mono);font-size:.7rem;line-height:1.7;color:#A8B0BC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sr-line b{font-weight:400;color:#C9D1DC}
 .sr-fields>div{opacity:0;transform:translateY(5px);transition:all .4s cubic-bezier(.16,1,.3,1)}
 .sr-fields>div.in{opacity:1;transform:none}
 
@@ -423,6 +458,14 @@ kbd{font-family:var(--mono);font-size:.72em;padding:2px 6px;border-radius:5px;ba
 .lb-in img{max-width:100%;max-height:84vh;border-radius:12px;box-shadow:0 30px 90px rgba(0,0,0,.7);
   border:1px solid var(--line)}
 .lb-cap{margin-top:14px;font-size:.86rem;color:var(--ink-2)}
+
+/* 进阶说明条 */
+.note-strip{margin-top:22px;border:1px solid var(--line);border-left:2.5px solid var(--teal);
+  border-radius:12px;background:rgba(79,209,197,.04);padding:18px 20px}
+.note-h{font-size:.88rem;color:#fff;margin-bottom:8px;display:flex;align-items:center;gap:9px;font-weight:560}
+.note-h .k{font-size:.66rem;color:var(--teal);font-weight:700;letter-spacing:.06em;
+  border:1px solid rgba(79,209,197,.3);background:rgba(79,209,197,.1);padding:2px 7px;border-radius:5px}
+.note-strip p{font-size:.83rem;color:var(--ink-2);line-height:1.72;margin-bottom:8px}
 
 /* ============================================================
    FEATURE GRID
@@ -699,14 +742,19 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
           <span class="tl" style="background:#FEBC2E"></span>
           <span class="tl" style="background:#28C840"></span>
           <div class="reader-url">docs/distributed-systems/consensus.md</div>
+          <div class="mode-sw" role="tablist" aria-label="切换触发方式">
+            <button class="mode-btn on" data-mode="d" role="tab" aria-selected="true">⌥D 划词</button>
+            <button class="mode-btn" data-mode="s" role="tab" aria-selected="false">⌥S 截图</button>
+          </div>
         </div>
         <div class="reader-body" id="heroText">
           <h4>Distributed Systems — Consensus</h4>
           <p>A distributed system is a collection of <span class="tok" data-t="w" data-w="coherent">coherent</span> nodes that must remain correct under partial failure. Every retry needs an <span class="tok" data-t="w" data-w="idempotent">idempotent</span> <span class="tok" data-t="w" data-w="operation">operation</span> to avoid double charging.</p>
           <p><span class="tok" data-t="s">When a quorum of replicas acknowledges a write, the value is considered committed, and any later read must observe that same value.</span></p>
           <p>An ack is a promise: once the write reaches durable storage, no failover can take it back — that guarantee is what engineers mean by <span class="tok" data-t="w" data-w="durability">durability</span>.</p>
+          <div class="hero-sel" id="heroSel"></div>
         </div>
-        <div class="reader-hint">
+        <div class="reader-hint" id="heroHint">
           <span class="dot"></span> 点击划线词试一下
         </div>
 
@@ -715,7 +763,7 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
           <div class="card-in">
           <div class="card-top">
             <div class="seg">
-              <span data-seg="w" role="button" tabindex="0" aria-label="按单词查询">词</span><span data-seg="s" role="button" tabindex="0" aria-label="按句子查询">句</span><span data-seg="p" role="button" tabindex="0" aria-label="按段落查询">段</span>
+              <span data-seg="w" role="button" tabindex="0" aria-label="按单词查询">词</span><span data-seg="s" role="button" tabindex="0" aria-label="按句子查询">句</span><span data-seg="p" role="button" tabindex="0" aria-label="按段落查询">段</span><span data-seg="r" class="seg-shot" role="tab" aria-selected="true">读图</span>
             </div>
             <div class="card-tools">
               <i title="固定"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 17.5s-5.5-4.6-5.5-9a5.5 5.5 0 0 1 11 0c0 4.4-5.5 9-5.5 9z" stroke-linejoin="round"/><circle cx="10" cy="8.3" r="1.8"/></svg></i><i title="设置"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.4"/><path d="M10 3v2.2M10 14.8V17M3 10h2.2M14.8 10H17M5.2 5.2l1.5 1.5M13.3 13.3l1.5 1.5M14.8 5.2l-1.5 1.5M6.7 13.3l-1.5 1.5" stroke-linecap="round"/></svg></i><i title="关闭" class="close-card">✕</i>
@@ -864,7 +912,7 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
     <div class="sec-head rv">
       <span class="eyebrow">⌥S 截图即问</span>
       <h2>图里的英文，也能划词查</h2>
-      <p class="lead">图表、截图、PDF 页面、视频画面里的英文——这些不是文本，划不出来。Gloss 把框选区域整块交给多模态模型读图，并且能在缩略图上直接点某个单词继续深挖。不做本地 OCR，少一层"识别错→解释错"的间接链路。</p>
+      <p class="lead">图表、截图、PDF 页面、视频画面里的英文——这些不是文本，划不出来。Gloss 把框选区域整块交给多模态模型读图，并且能在卡片缩略图上<strong style="color:var(--ink)">点图上任意位置</strong>，让模型按点击坐标单独解释那一个词。不做本地 OCR，少一层"识别错→解释错"的间接链路。</p>
     </div>
 
     <div class="shot-stage rv rv-d1">
@@ -887,12 +935,11 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
       <div class="shot-result" id="shotResult">
         <div class="sr-inner">
           <div class="sr-thumb" id="srThumb">
-            <span class="sr-thumb-lbl" id="thumbLbl">截图缩略图 · 点击任一单词继续查</span>
-            <div class="sr-words">
-              <span class="word">throughput</span>
-              <span class="word">latency</span>
-              <span class="word">quorum</span>
-              <span class="word">replicate</span>
+            <span class="sr-thumb-lbl" id="thumbLbl">原始截图</span>
+            <div class="sr-mini" id="srMini">
+              <span class="sr-line">Region · <b>Throughput</b> (rps) · <b>p99 Latency</b></span>
+              <span class="sr-line">us-east-1 — 18,420 — 42ms — <b>quorum write</b></span>
+              <span class="sr-line">eu-west-1 — 11,905 — 118ms — <b>async replicate</b></span>
             </div>
           </div>
           <div class="sr-fields" id="srFields">
@@ -912,6 +959,12 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
     <p class="lead" style="margin-top:16px;font-size:.83rem;color:var(--ink-3);text-align:center" id="shotHint">
       截图按长边 1568px 压缩为 JPEG 后发送。松手 → 浮窗 &lt;0.3s，读图结果首字 &lt;3s。
     </p>
+
+    <div class="note-strip rv rv-d2">
+      <div class="note-h"><span class="k">进阶</span>图上点词</div>
+      <p>截图卡顶部是<strong style="color:var(--ink)">原始截图</strong>——不做本地 OCR，也不预先把词抽出来。在它上面<strong style="color:var(--ink)">点任意位置</strong>，App 会把「原图 + 点击坐标（量化到 1% 网格）」一并发给多模态模型，由模型判断该处是什么词并单独解释。卡片正文不可选中，所以这是截图场景下对单个词深挖的路径。</p>
+      <p style="margin-bottom:0">它依赖模型的视觉定位，比纯文本查词慢（实测 4–14 秒不等）。</p>
+    </div>
   </div>
 </section>
 
@@ -1053,7 +1106,7 @@ The third property is partition tolerance. A network partition splits the cluste
       <div class="stat"><div class="stat-v grad-teal">2.0<span style="font-size:1rem">MB</span></div><div class="stat-l">安装包大小</div></div>
       <div class="stat"><div class="stat-v grad-teal">&lt;0.2<span style="font-size:1rem">s</span></div><div class="stat-l">按键 → 浮窗</div></div>
       <div class="stat"><div class="stat-v grad-teal">1</div><div class="stat-l">第三方依赖</div></div>
-      <div class="stat"><div class="stat-v grad-teal">68</div><div class="stat-l">项核心逻辑自检断言</div></div>
+      <div class="stat"><div class="stat-v grad-teal">88</div><div class="stat-l">项核心逻辑自检断言</div></div>
     </div>
   </div>
 </section>
@@ -1111,14 +1164,14 @@ xattr -cr Gloss.app
 open Gloss.app</div>
           </div>
           <div class="code-box" style="margin-bottom:18px">
-            <div class="code-head">核心逻辑自检 · 68 项断言</div>
+            <div class="code-head">核心逻辑自检 · 88 项断言</div>
             <div class="code-body"><span class="cm"># 不依赖 Sparkle / AVFoundation，</span>
 <span class="cm"># 纯 swiftc 即可编译运行</span>
 swiftc -O SelfCheck/main.swift \
   Gloss/Core/{QueryRouter,SSEParser,\
 SectionExtractor,PromptLibrary,\
-CacheStore,ImagePipeline,GlossLog,\
-ProviderPresets,LLMClient}.swift \
+CacheStore,ImagePipeline,\
+ImageGeometry,GlossLog,LLMClient}.swift \
   -o selfcheck
 ./selfcheck   <span class="cm"># SELFCHECK ALL PASS</span></div>
           </div>
@@ -1205,7 +1258,7 @@ git clone https://github.com/yujuntea/gloss.git
 cd gloss
 open Gloss.xcodeproj   <span class="cm"># 直接 Cmd+R 运行</span>
 
-<span class="cm"># 核心纯逻辑自检（68 项断言，命令见下载区）</span>
+<span class="cm"># 核心纯逻辑自检（88 项断言，命令见下载区）</span>
 
 <span class="cm"># 规范打包发布（构建→验签→zip→appcast 签名）</span>
 ./scripts/release.sh --publish</div>
@@ -1570,6 +1623,7 @@ function positionCard(){
 }
 function showCard(seg, key, anchorTok){
   clearTimers();
+  card.parentElement.classList.remove('sim-shot');
   cardAnchor = (seg==='w' && anchorTok) ? anchorTok : null;
   card.classList.toggle('word-mode', !!cardAnchor);
   cardBody.innerHTML = seg==='w' ? renderWord(key) : (seg==='s' ? renderSentence() : renderPara());
@@ -1591,6 +1645,8 @@ function showCard(seg, key, anchorTok){
 function hideCard(){
   clearTimers();
   card.classList.remove('show');
+  card.parentElement.classList.remove('sim-shot');
+  const hs = $('#heroSel'); if(hs) hs.classList.remove('run');
   $('#heroText').classList.remove('dim');
   cardAnchor = null;
   $$('#heroText .tok').forEach(t=>{ t.classList.remove('sel'); t.classList.remove('hint'); t.classList.remove('pin-tip'); t.classList.remove('flip-tip'); });
@@ -1617,6 +1673,7 @@ later(()=>{ const t=$('#heroText .tok'); if(t && !reduce && !$('.tok.sel')) t.cl
 $$('#heroCard .seg span').forEach(seg=>{
   const act = (e)=>{
     e.stopPropagation(); e.preventDefault();
+    if(seg.dataset.seg === 'r'){ runHeroShot(); return; }
     const tok = $('#heroText .tok.sel');
     showCard(seg.dataset.seg, tok ? tok.dataset.w : 'idempotent');
   };
@@ -1625,6 +1682,79 @@ $$('#heroCard .seg span').forEach(seg=>{
 });
 $('#heroCard .close-card').addEventListener('click', e=>{ e.stopPropagation(); hideCard(); });
 document.addEventListener('click', e=>{ if(!e.target.closest('#heroCard') && !e.target.closest('#heroText .tok')) hideCard(); });
+
+/* ============================================================
+   HERO trigger switcher — ⌥D 划词 / ⌥S 截图
+   Hero 里的 ⌥S 是「预告」：选区动画 + 精简截图卡；下方独立 ⌥S 段
+   是「深潜」（完整三段式输出 + 图上点词）。同一张卡片面板切换内容，
+   不额外占高度，也避免同页出现两个内容雷同的演示。
+   ============================================================ */
+const heroSel = $('#heroSel'), heroHint = $('#heroHint');
+let heroMode = 'd';
+const SHOT_TEXT = 'A distributed system is a collection of <em>coherent</em> nodes that must remain correct under partial failure. Every retry needs an <em>idempotent</em> <em>operation</em>.';
+function renderShotCard(){
+  return row('sh-thumb',
+      '<div class="shot-thumb shot-thumb-plain">'+
+        '<span class="shot-thumb-lbl">原始截图（点图上任意位置可单独查词，详见下方 ⌥S 专区）</span>'+
+        '<div class="shot-thumb-img">'+SHOT_TEXT+'</div>'+
+      '</div>')
+   + row('sh-ocr','<div class="ctx" style="margin:0"><b>识别内容</b>　"A distributed system is a collection of coherent nodes that must remain correct under partial failure…"</div>')
+   + row('sh-exp','<div class="lbl">翻译与解释</div><p style="font-size:.82rem;line-height:1.72;color:#D6DBE3">框选区域在讲<b style="color:#fff">分布式系统为什么必须幂等</b>：节点可能崩溃、网络链路可能丢消息，所以每个操作都要满足"重复执行结果不变"——重试因此永远安全，不会重复扣款。</p>')
+   + row('sh-key','<div class="lbl">要点</div><ul class="lst"><li>局部故障（partial failure）是常态，幂等是把"重试"变成安全操作的前提。</li></ul>');
+}
+function showShotCard(){
+  clearTimers();
+  cardAnchor = null;
+  card.classList.remove('word-mode','flip');
+  cardBody.style.maxHeight = '';
+  card.parentElement.classList.add('sim-shot');
+  $$('#heroText .tok').forEach(t=> t.classList.remove('sel','hint','pin-tip','flip-tip'));
+  cardBody.innerHTML = renderShotCard();
+  cardSrc.textContent = '⌥S';
+  $('#heroKind').textContent = '读图查询';
+  positionCard();
+  card.classList.add('show');
+  $('#heroText').classList.add('dim');
+  const rows = $$('#heroCardBody .st-row');
+  rows.forEach((r,i)=> later(()=>r.classList.add('in'), reduce ? 0 : 110*i));
+}
+function runHeroShot(){
+  if(heroMode !== 's') return;
+  heroSel.classList.remove('run'); void heroSel.offsetWidth; heroSel.classList.add('run');
+  heroHint.innerHTML = '<span class="dot"></span> ⌥S 正在框选这块区域…';
+  later(()=>{
+    heroSel.classList.remove('run');
+    showShotCard();
+  }, reduce ? 140 : 1400);
+}
+function setMode(m){
+  if(heroMode === m) return;
+  heroMode = m;
+  $$('.mode-btn').forEach(b=>{
+    const on = b.dataset.mode===m;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  clearTimers();
+  card.classList.remove('show');
+  heroSel.classList.remove('run');
+  card.parentElement.classList.remove('sim-shot');
+  $$('#heroText .tok').forEach(t=>{ t.classList.remove('sel','hint','pin-tip','flip-tip'); });
+  if(m === 's'){
+    $('#heroText').classList.add('dim');
+    heroHint.innerHTML = '<span class="dot"></span> 切到 ⌥S：模拟框选屏幕区域';
+    later(runHeroShot, 300);
+  } else {
+    $('#heroText').classList.remove('dim');
+    heroHint.innerHTML = '<span class="dot"></span> 点击划线词试一下';
+    later(()=>{ const t=$('#heroText .tok'); if(t && !reduce) t.classList.add('hint'); }, 520);
+  }
+}
+$$('.mode-btn').forEach(b=>{
+  const act = e=>{ e.stopPropagation(); setMode(b.dataset.mode); };
+  b.addEventListener('click', act);
+  b.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ act(e); } });
+});
 
 /* ============================================================
    ROUTER demo
@@ -1694,8 +1824,7 @@ const srFieldsDefault = srFields.innerHTML; // 保留整图解读的初始字段
 function runShot(){
   if(shotRunning) return; shotRunning=true;
   shotResult.classList.remove('show');
-  thumbLbl.textContent = '截图缩略图 · 点击任一单词继续查';
-  $$('#srThumb .word').forEach(x=>x.classList.remove('picked'));
+  thumbLbl.textContent = '原始截图';
   srFields.innerHTML = srFieldsDefault;
   selBox.classList.remove('run'); void selBox.offsetWidth; selBox.classList.add('run');
   shotHint.textContent = '框选中——松手即发送…';
@@ -1703,47 +1832,13 @@ function runShot(){
   setTimeout(()=>{
     selBox.classList.remove('run');
     shotResult.classList.add('show');
-    shotHint.textContent = '松手 → 浮窗 <0.3s，读图结果首字 <3s。点缩略图上的单词可继续查该词。';
+    shotHint.textContent = '松手 → 浮窗 <0.3s，读图结果首字 <3s。点缩略图任意位置可查该处英文（原图 + 坐标交给模型定位）。';
     $$('#srFields > div').forEach((d,i)=> shotLater(()=>d.classList.add('in'), reduce?0:130*i));
     shotRunning=false;
   }, delay);
 }
 shotBtn.addEventListener('click', runShot);
 setTimeout(runShot, 900);
-
-// click a word in the thumbnail → switch to word card
-$$('#srThumb .word').forEach(w=>{
-  w.addEventListener('click', e=>{
-    e.stopPropagation();
-    $$('#srThumb .word').forEach(x=>x.classList.remove('picked'));
-    w.classList.add('picked');
-    const txt = w.textContent;
-    thumbLbl.innerHTML = '<span style="color:var(--teal)">← 返回整图</span>　已定位 <b style="color:#fff">'+txt+'</b>，语境义取该词在本图语境中的含义';
-    srFields.innerHTML =
-      '<div><div class="lbl">图上定位</div><p style="font-size:.81rem;color:var(--ink-2);line-height:1.68">在缩略图上检测到 <strong style="color:#fff;font-family:var(--mono)">'+txt+'</strong>，点击坐标（归一化百分比）已随原图一并发给模型。</p></div>'+
-      '<div><div class="ctx" style="margin:12px 0"><b>语境义</b>　'+
-        (txt==='throughput' ? '单位时间内完成的请求数；此处指压测下的 QPS 吞吐' :
-         txt==='latency' ? '请求发出到收到响应的耗时；表中取的是最慢的 1%（p99）' :
-         txt==='quorum' ? '达到多数派才算提交的写入策略，保证强一致' :
-         '异步把写入复制到其他节点，换取更高吞吐、牺牲一致性')+
-      '</div></div>'+
-      '<div><div class="lbl">词性与释义</div><ul class="lst">'+
-        '<li><em>adj./n.</em> '+
-        (txt==='throughput' ? '吞吐量的；吞吐量 —— 单位时间完成的请求数' :
-         txt==='latency' ? '延迟的；延迟 —— 请求往返耗时' :
-         txt==='quorum' ? '法定人数的；多数派节点集合' :
-         '复制的；复本 —— 数据的副本')+
-        '</li></ul></div>'+
-      '<div><div class="lbl">搭配</div><ul class="lst"><li>'+
-        (txt==='throughput' ? 'peak throughput — 峰值吞吐' :
-         txt==='latency' ? 'p99 latency — p99 尾延迟' :
-         txt==='quorum' ? 'quorum read / quorum write — 多数派读 / 写' :
-         'read replica — 只读副本')+
-        '</li></ul></div>';
-    clearShotTimers();
-    $$('#srFields > div').forEach((d,i)=> shotLater(()=>d.classList.add('in'), reduce?0:110*i));
-  });
-});
 
 // click a vocab word in the reader demo → jump to the hero word card
 $$('.vocab-w').forEach(v=>{
