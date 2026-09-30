@@ -8,6 +8,7 @@ English | [简体中文](README.md)
   <img src="docs/screenshots/screenshot-reading.png" width="880" alt="Screenshot reading: frame any English text region, get translation + term notes">
   <br>
   <img src="docs/screenshots/word-card.png" width="420" alt="Word card">
+  <img src="docs/screenshots/word-chips.png" width="420" alt="Screenshot card with tappable hard-word chips">
 </p>
 
 <p align="center">
@@ -25,7 +26,8 @@ Reading English documents today means switching to a dictionary site for unknown
   - **Word card**: US/UK IPA, **context-aware meaning**, collocations, bilingual examples, etymology
   - **Sentence card**: faithful translation + clause-by-clause structure breakdown + difficult words (click any chip to keep drilling)
   - **Paragraph card**: translation + key vocabulary table
-- **⌥S Capture & ask**: frame any screen region (images, charts, video frames, non-selectable UI) and send it straight to a multimodal model; **click a word on the thumbnail** to look it up
+- **⌥S Capture & ask**: frame any screen region (images, charts, video frames, non-selectable UI) and send it straight to a multimodal model. Result cards carry **tappable hard-word chips** (IPA + in-image sense; querying one automatically uses its in-image sentence as context); wide screenshots open a **zoom window** from the thumbnail — click any word on the full-res image (crosshair shows what you're pointing at) and keep clicking without closing
+- **Visible thinking**: the model's long reasoning before the answer (measured 4–20s+ for word-on-image) streams live inside the skeleton with a timer, then collapses the moment content arrives. A two-tier timeout tells "genuinely dead stream" from "still thinking", so slow queries are no longer killed
 - **Long-form deep read**: selecting ≥400 words opens the reader window — batched full translation, vocabulary table (IPA / sense / original example), terminology table, and argument-structure analysis
 - **Speech**: offline system TTS with US/UK voices for words, sentences, and recognized text
 - **Vocabulary trail**: query history with replay; response cache (repeated lookups are instant and free)
@@ -97,9 +99,9 @@ open Gloss.xcodeproj   # Xcode 16+, just Cmd+R
 ## Technical notes
 
 - **Text capture**: Accessibility API first (including selection bounds and surrounding context), simulated ⌘C clipboard fallback, automatic degradation between the two
-- **SSE streaming**: byte-level line splitting that preserves blank lines (`URLSession.bytes.lines` silently drops SSE event delimiters — found the hard way), supports both `reasoning_content` and inline `<think>` reasoning shapes, exponential-backoff retry on 429/5xx
+- **SSE streaming**: byte-level line splitting that preserves blank lines (`URLSession.bytes.lines` silently drops SSE event delimiters — found the hard way), supports both `reasoning_content` and inline `<think>` reasoning shapes (reasoning is throttled and streamed to the card live), exponential-backoff retry on 429/5xx
 - **Multimodal**: screenshots are downscaled to ≤1568px JPEG and sent as `image_url` data URLs
-- **Cache**: key = sha256(normalized input | kind | params | model | prompt version), LRU + SwiftData persistence; word-at-point coordinates are quantized to a 1% grid and folded into the key
+- **Cache**: key = sha256(normalized input | kind | params | model | per-kind prompt version | context digest), LRU + SwiftData persistence — the same word queried in different contexts or screenshots gets its own entry, so contextual senses never cross-contaminate; word-at-point coordinates are quantized to a 1% grid and folded into the key
 - **Popup**: nonactivating NSPanel that never steals keyboard focus, works in fullscreen and across displays; ESC is a consuming global hotkey installed only while the panel is visible
 - **Auto-updates**: Sparkle 2 + a static GitHub Releases appcast (`releases/latest/download/appcast.xml`, which GitHub 302s to the newest release asset — **no self-hosted backend**); update packages are EdDSA-verified (public key in Info.plist, private key in the publisher's keychain); the menu bar and the settings page share a single updater instance (`UpdaterCenter`)
 

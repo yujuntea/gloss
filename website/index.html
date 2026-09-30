@@ -711,7 +711,7 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
     <div class="hero-grid">
       <div class="rv in">
         <div class="hero-badges">
-          <span class="badge"><b data-ver>v0.1.7</b> · <span data-verdate>2026-09-29</span> <i class="live-dot" id="liveDot" title="版本号实时取自 GitHub Releases"></i></span>
+          <span class="badge"><b data-ver>v0.1.8</b> · <span data-verdate>2026-09-30</span> <i class="live-dot" id="liveDot" title="版本号实时取自 GitHub Releases"></i></span>
           <span class="badge">macOS 14+</span>
           <span class="badge">Apple Silicon + Intel</span>
           <span class="badge">MIT 开源</span>
@@ -725,7 +725,7 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
         <div class="hero-actions">
           <a class="btn btn-p" href="#download">
             <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a.75.75 0 0 1 .75.75v6.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75A.75.75 0 0 1 8 1zM2.75 12.5a.75.75 0 0 1 .75.75v.5h9v-.5a.75.75 0 0 1 1.5 0v.75a1.25 1.25 0 0 1-1.25 1.25h-9.5A1.25 1.25 0 0 1 2.5 13.75v-.75a.75.75 0 0 1 .75-.75z"/></svg>
-            <span>下载 Gloss <span data-ver>v0.1.7</span></span>
+            <span>下载 Gloss <span data-ver>v0.1.8</span></span>
           </a>
           <a class="btn btn-g" href="https://github.com/yujuntea/gloss" target="_blank" rel="noopener">查看源码</a>
           <a class="btn btn-g" href="#build">使用说明</a>
@@ -912,7 +912,7 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
     <div class="sec-head rv">
       <span class="eyebrow">⌥S 截图即问</span>
       <h2>图里的英文，也能划词查</h2>
-      <p class="lead">图表、截图、PDF 页面、视频画面里的英文——这些不是文本，划不出来。Gloss 把框选区域整块交给多模态模型读图，并且能在卡片缩略图上<strong style="color:var(--ink)">点图上任意位置</strong>，让模型按点击坐标单独解释那一个词。不做本地 OCR，少一层"识别错→解释错"的间接链路。</p>
+      <p class="lead">图表、截图、PDF 页面、视频画面里的英文——这些不是文本，划不出来。Gloss 把框选区域整块交给多模态模型读图，结果卡顶部直接给出<strong style="color:var(--ink)">可点难词词条</strong>（音标 + 图中含义）；想指定图上某个位置，点缩略图打开<strong style="color:var(--ink)">放大窗</strong>，原图上点哪个词查哪个。不做本地 OCR，少一层"识别错→解释错"的间接链路。</p>
     </div>
 
     <div class="shot-stage rv rv-d1">
@@ -961,9 +961,10 @@ footer{border-top:1px solid var(--line);padding:38px 0;background:rgba(0,0,0,.28
     </p>
 
     <div class="note-strip rv rv-d2">
-      <div class="note-h"><span class="k">进阶</span>图上点词</div>
-      <p>截图卡顶部是<strong style="color:var(--ink)">原始截图</strong>——不做本地 OCR，也不预先把词抽出来。在它上面<strong style="color:var(--ink)">点任意位置</strong>，App 会把「原图 + 点击坐标（量化到 1% 网格）」一并发给多模态模型，由模型判断该处是什么词并单独解释。卡片正文不可选中，所以这是截图场景下对单个词深挖的路径。</p>
-      <p style="margin-bottom:0">它依赖模型的视觉定位，比纯文本查词慢（实测 4–14 秒不等）。</p>
+      <div class="note-h"><span class="k">进阶</span>截图场景查生词的两条路</div>
+      <p><strong style="color:var(--ink)">难词词条直点</strong>——截图结果卡顶部有一排「难词」胶囊（音标 + 图中含义），点哪个查哪个：词来自模型已转写的识别内容，命中即准确，语境自动带上图中原句，且和其他截图/文本的同词查询各自缓存不串味。</p>
+      <p>想指定某个具体位置（模型转写错了、或图里没转出来的标注），<strong style="color:var(--ink)">点缩略图打开放大窗</strong>——原图完整分辨率铺满窗口，十字准星与坐标读数确认所指，点一下即查，窗口不关可连续点多个词。App 会把「原图 + 点击坐标（量化到 1% 网格）」一并发给多模态模型。</p>
+      <p style="margin-bottom:0">图上点词依赖视觉定位，比纯文本查词慢（实测 4–20 秒，思考过程实时可见）；点在多词交界时模型会列出候选让你选，不硬猜。小尺寸截图不弹窗，卡片内直接点。</p>
     </div>
   </div>
 </section>
@@ -1034,8 +1035,8 @@ The third property is partition tolerance. A network partition splits the cluste
   <div class="wrap">
     <div class="sec-head rv">
       <span class="eyebrow">真实界面</span>
-      <h2>不是效果图，是 <span data-ver>v0.1.7</span> 跑起来的样子</h2>
-      <p class="lead">下面三张是 App 实机截图，没有做任何修饰。点任意一张可以放大看。</p>
+      <h2>不是效果图，是 <span data-ver>v0.1.8</span> 跑起来的样子</h2>
+      <p class="lead">下面五张是 App 实机截图，没有做任何修饰。点任意一张可以放大看。</p>
     </div>
 
     <div class="shots rv rv-d1">
@@ -1046,6 +1047,14 @@ The third property is partition tolerance. A network partition splits the cluste
       <figure class="shot" data-full="assets/word-card.webp" data-cap="⌥D 划词即查：语境义置顶 + 美英音标 + 搭配 + 双语例句 + 词源辨析">
         <img src="assets/word-card.webp" alt="划词词卡：单词、美英音标、语境义、搭配、例句、辨析" loading="lazy" width="664" height="900" />
         <figcaption class="shot-cap"><span class="k">⌥D</span><span><b>划词即查</b> · 语境义置顶，不切窗口、不抢焦点</span></figcaption>
+      </figure>
+      <figure class="shot" data-full="assets/shot-chips.png" data-cap="⌥S 截图卡难词词条：结果卡顶部的生词胶囊可直接点查，语境自动带图中原句">
+        <img src="assets/shot-chips.png" alt="截图查询结果卡：顶部难词词条（over-parameterized、hallucination、reranking 等）可直接点查" loading="lazy" width="800" height="1114" />
+        <figcaption class="shot-cap"><span class="k">⌥S</span><span><b>难词直点</b> · 截图里的生词不再是纯文本——顶部胶囊点哪个查哪个，语境自动带图中原句</span></figcaption>
+      </figure>
+      <figure class="shot" data-full="assets/shot-thinking.png" data-cap="思考过程实时可见：骨架屏内滚动展示模型思考尾部 + 计时">
+        <img src="assets/shot-thinking.png" alt="查询加载态：「思考中 · 0s」计时与模型思考内容实时滚动" loading="lazy" width="800" height="528" />
+        <figcaption class="shot-cap"><span class="k">思考中</span><span><b>看得见的思考</b> · 长思考实时滚动展示，正文到达即收起；慢查询不再被误判超时</span></figcaption>
       </figure>
       <figure class="shot" data-full="assets/reader.webp" data-cap="长文精读窗：左原文，右「翻译 / 生词 / 术语 / 解读」四页签">
         <img src="assets/reader.webp" alt="长文精读窗：左侧英文原文，右侧翻译、生词、术语、解读四个页签" loading="lazy" width="1800" height="1224" />
@@ -1066,12 +1075,12 @@ The third property is partition tolerance. A network partition splits the cluste
       <div class="f rv rv-d1"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="3.5" width="15" height="13" rx="2.2"/><path d="M2.5 7.2h15"/><circle cx="5.1" cy="5.35" r=".6" fill="currentColor" stroke="none"/><circle cx="7.3" cy="5.35" r=".6" fill="currentColor" stroke="none"/><path d="M6.5 12.5h7" stroke-linecap="round"/></svg></div><h3>不抢焦点的浮窗</h3><p>nonactivating NSPanel，永不成为 key window——你在原文里继续敲字，浮窗照样显示。跨越全屏视频也能弹出。</p></div>
       <div class="f rv rv-d2"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.8 2.2 5.2 11h3.9l-.9 6.8L13.9 9H10l.8-6.8z" stroke-linejoin="round"/></svg></div><h3>唤起即出结果</h3><p>类型自动路由、SSE 逐块流式渲染、缓存命中即回显。按键到浮窗出现 &lt;0.2s，首字内容 &lt;1.5s。</p></div>
       <div class="f rv rv-d3"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 8v4h2.8L10 15.3V4.7L6.3 8H3.5z" stroke-linejoin="round"/><path d="M12.5 7.5a3.5 3.5 0 0 1 0 5M14.8 5.5a6.3 6.3 0 0 1 0 9" stroke-linecap="round"/></svg></div><h3>离线朗读</h3><p>走系统 TTS，不额外花钱也不外传文本。美音 / 英音一键切换，词、整句、识别出的图上文本都能读，语速 0.5–1.5× 可调。</p></div>
-      <div class="f rv"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="10" cy="4.8" rx="6.5" ry="2.3"/><path d="M3.5 4.8v10.4c0 1.27 2.9 2.3 6.5 2.3s6.5-1.03 6.5-2.3V4.8"/><path d="M3.5 10c0 1.27 2.9 2.3 6.5 2.3s6.5-1.03 6.5-2.3"/></svg></div><h3>重复查询零成本</h3><p>缓存键 = sha256(归一化输入 | 类型 | 参数 | 模型 | Prompt 版本)，LRU + SwiftData 持久化。截图点词的坐标量化到 1% 网格后参与键计算。</p></div>
+      <div class="f rv"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="10" cy="4.8" rx="6.5" ry="2.3"/><path d="M3.5 4.8v10.4c0 1.27 2.9 2.3 6.5 2.3s6.5-1.03 6.5-2.3V4.8"/><path d="M3.5 10c0 1.27 2.9 2.3 6.5 2.3s6.5-1.03 6.5-2.3"/></svg></div><h3>重复查询零成本</h3><p>缓存键 = sha256(归一化输入 | 类型 | 参数 | 模型 | 分类型 Prompt 版本 | 语境摘要)，LRU + SwiftData 持久化。同一个词在不同上下文里查询各自成键，语境义不串味；截图点词的坐标量化到 1% 网格后参与键计算。</p></div>
       <div class="f rv rv-d1"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16.8 10A6.8 6.8 0 1 1 14 4.4" stroke-linecap="round"/><path d="M14.6 2.2l-.4 2.9 2.9.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 6.5V10l2.5 1.5" stroke-linecap="round"/></svg></div><h3>历史可回放</h3><p>每次查询都留档，按类型分组，支持搜索与回放。截图条目仅回放不重查——原图不落盘，重查请重新 ⌥S。</p></div>
       <div class="f rv rv-d2"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15.6 7.5A6 6 0 0 0 5.1 5.9L3.6 7.7"/><path d="M3.4 3.6l.2 4.1 4.1-.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.4 12.5a6 6 0 0 0 10.5 1.6l1.5-1.8"/><path d="M16.6 16.4l-.2-4.1-4.1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>App 内自动更新</h3><p>Sparkle 2 + GitHub Releases 静态 appcast，零自建后端。更新包经 EdDSA 签名校验，点一下即下载安装并重启，权限不用重授。</p></div>
       <div class="f rv rv-d3"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4.5" y="8.5" width="11" height="8" rx="2"/><path d="M7 8.5V6.5a3 3 0 0 1 6 0v2"/><circle cx="10" cy="12.5" r=".9" fill="currentColor" stroke="none"/></svg></div><h3>隐私边界清楚</h3><p>API Key 只存本机钥匙串，日志 / 缓存 / 历史中不落明文。无遥测、无崩溃上报、无任何第三方数据收集。</p></div>
       <div class="f rv"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h2.8c1.7 0 2.8.9 3.9 2.3C10.9 10 12 12 14.1 12h1.4" stroke-linecap="round"/><path d="M3 12h2.8c1.7 0 2.8-.9 3.9-2.3C10.9 8 12 6 14.1 6h1.4" stroke-linecap="round"/><path d="M13.6 3.9 15.7 6l-2.1 2.1M13.6 9.9l2.1 2.1-2.1 2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>双通道取词兜底</h3><p>AX 优先（带选区 bounds 与上下文），失败自动降级模拟 ⌘C 读剪贴板并尽力恢复。两通道都失败才给降级提示，并引导改用 ⌥S。</p></div>
-      <div class="f rv rv-d1"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16.5 5.8v6a2.3 2.3 0 0 1-2.3 2.3H8.5L5 17v-2.9a2.3 2.3 0 0 1-1.5-2.3v-6A2.3 2.3 0 0 1 5.8 3.5h8.4a2.3 2.3 0 0 1 2.3 2.3z" stroke-linejoin="round"/><path d="M7 7.5h6M7 10.2h3.8" stroke-linecap="round"/></svg></div><h3>错误说人话</h3><p>401 说"API Key 无效或已过期"，429 说"请求太频繁"，超时不自动重试（超时≠限流）。429/5xx 指数退避重试 2 次并注明。</p></div>
+      <div class="f rv rv-d1"><div class="f-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16.5 5.8v6a2.3 2.3 0 0 1-2.3 2.3H8.5L5 17v-2.9a2.3 2.3 0 0 1-1.5-2.3v-6A2.3 2.3 0 0 1 5.8 3.5h8.4a2.3 2.3 0 0 1 2.3 2.3z" stroke-linejoin="round"/><path d="M7 7.5h6M7 10.2h3.8" stroke-linecap="round"/></svg></div><h3>错误说人话</h3><p>401 说"API Key 无效或已过期"，429 说"请求太频繁"，超时不自动重试（超时≠限流）——「模型响应超时」（流假死）与「模型思考时间过长」（思考过久）分开报，长思考还会实时展示进度。429/5xx 指数退避重试 2 次并注明。</p></div>
     </div>
   </div>
 </section>
@@ -1118,8 +1127,8 @@ The third property is partition tolerance. A network partition splits the cluste
       <div class="dl-grid">
         <div>
           <div class="ver-line">
-            <span class="ver-pill" data-ver>v0.1.7</span>
-            <span class="ver-date"><span data-verdate>2026-09-29</span> · 本版本起支持 Intel Mac</span>
+            <span class="ver-pill" data-ver>v0.1.8</span>
+            <span class="ver-date"><span data-verdate>2026-09-30</span> · 本版本起支持 Intel Mac</span>
           </div>
           <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);margin-bottom:14px">下载 Gloss</h2>
           <p class="lead" style="font-size:.95rem">
@@ -1128,7 +1137,7 @@ The third property is partition tolerance. A network partition splits the cluste
           </p>
 
           <div class="dl-meta">
-            <div class="dl-m"><div class="k">最新版本</div><div class="v"><span data-ver>v0.1.7</span> (build <span data-build>8</span>)</div></div>
+            <div class="dl-m"><div class="k">最新版本</div><div class="v"><span data-ver>v0.1.8</span> (build <span data-build>9</span>)</div></div>
             <div class="dl-m"><div class="k">系统要求</div><div class="v">macOS 14 Sonoma+</div></div>
             <div class="dl-m"><div class="k">架构</div><div class="v">arm64 + x86_64 通用</div></div>
             <div class="dl-m"><div class="k">体积</div><div class="v">约 2.0 MB</div></div>
@@ -1137,7 +1146,7 @@ The third property is partition tolerance. A network partition splits the cluste
           <div class="dl-actions">
             <a class="btn btn-p" id="dlBtn" href="https://github.com/yujuntea/gloss/releases/latest" target="_blank" rel="noopener">
               <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a.75.75 0 0 1 .75.75v6.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75A.75.75 0 0 1 8 1zM2.75 12.5a.75.75 0 0 1 .75.75v.5h9v-.5a.75.75 0 0 1 1.5 0v.75a1.25 1.25 0 0 1-1.25 1.25h-9.5A1.25 1.25 0 0 1 2.5 13.75v-.75a.75.75 0 0 1 .75-.75z"/></svg>
-              <span>下载 Gloss-<span data-ver>v0.1.7</span>.zip</span>
+              <span>下载 Gloss-<span data-ver>v0.1.8</span>.zip</span>
             </a>
             <a class="btn btn-g" href="https://github.com/yujuntea/gloss/releases" target="_blank" rel="noopener">全部版本</a>
             <a class="btn btn-g" href="https://github.com/yujuntea/gloss" target="_blank" rel="noopener">GitHub 仓库</a>
@@ -1158,7 +1167,7 @@ The third property is partition tolerance. A network partition splits the cluste
           <div class="code-box" style="margin-bottom:18px">
             <div class="code-head">~/Downloads</div>
             <div class="code-body"><span class="cm"># 解压并放行 quarantine 属性</span>
-unzip Gloss-<span data-ver>v0.1.7</span>.zip
+unzip Gloss-<span data-ver>v0.1.8</span>.zip
 <span class="cm"># （可选）仅为避开 Gatekeeper 拦截</span>
 xattr -cr Gloss.app
 open Gloss.app</div>
@@ -1299,7 +1308,7 @@ open Gloss.xcodeproj   <span class="cm"># 直接 Cmd+R 运行</span>
     <div class="sec-head rv">
       <span class="eyebrow v">路线图 · 计划中</span>
       <h2>接下来在做的事</h2>
-      <p class="lead">以下功能已进入设计、尚未随 <span data-ver>v0.1.7</span> 发布，页面上的所有交互演示都只使用已发布能力。</p>
+      <p class="lead">以下功能已进入设计、尚未随 <span data-ver>v0.1.8</span> 发布，页面上的所有交互演示都只使用已发布能力。</p>
     </div>
     <div class="rm">
       <div class="rm-card rv rv-d1">
@@ -1376,7 +1385,7 @@ open Gloss.xcodeproj   <span class="cm"># 直接 Cmd+R 运行</span>
       <div class="faq-i">
         <button class="faq-q">我的 Mac 停在 macOS 13，能用吗？<span class="ar">＋</span></button>
         <div class="faq-a"><div class="faq-a-in">
-          <p>暂时不能，<span data-ver>v0.1.7</span> 的系统下限是 macOS 14（Sonoma）。缓存层用 SwiftData，降到 13 需要重写存储层，而 Ventura 已停止安全更新，暂不划算。</p>
+          <p>暂时不能，<span data-ver>v0.1.8</span> 的系统下限是 macOS 14（Sonoma）。缓存层用 SwiftData，降到 13 需要重写存储层，而 Ventura 已停止安全更新，暂不划算。</p>
           <p>Intel 机型需要能安装 Sonoma，即 Apple 官方支持清单：MacBook Pro 2018 起、MacBook Air 2018 起、Mac mini 2018、iMac 2019 起、iMac Pro 2017、Mac Pro 2019。停在 13 或更早的（如 2017 款 MacBook Pro）暂不支持。</p>
         </div></div>
       </div>
@@ -1404,7 +1413,7 @@ open Gloss.xcodeproj   <span class="cm"># 直接 Cmd+R 运行</span>
     <h2 class="rv">下一次读英文，<span class="grad">别再为一个词切窗口</span></h2>
     <p class="lead rv rv-d1">2.0 MB，一个 zip，拖进应用程序就能用。MIT 开源，代码全在 GitHub 上。</p>
     <div class="final-actions rv rv-d2">
-      <a class="btn btn-p" id="dlBtn2" href="https://github.com/yujuntea/gloss/releases/latest" target="_blank" rel="noopener"><span>下载 Gloss <span data-ver>v0.1.7</span></span></a>
+      <a class="btn btn-p" id="dlBtn2" href="https://github.com/yujuntea/gloss/releases/latest" target="_blank" rel="noopener"><span>下载 Gloss <span data-ver>v0.1.8</span></span></a>
       <a class="btn btn-g" href="https://github.com/yujuntea/gloss" target="_blank" rel="noopener">GitHub 源码</a>
       <a class="btn btn-g" href="#build">使用说明</a>
     </div>
@@ -1415,7 +1424,7 @@ open Gloss.xcodeproj   <span class="cm"># 直接 Cmd+R 运行</span>
   <div class="wrap f-in">
     <div class="brand"><span class="brand-mark">G</span><span>Gloss <small>划词即释</small></span></div>
     <span class="f-sep"></span>
-    <span><span data-ver>v0.1.7</span> · macOS 14+ · MIT License</span>
+    <span><span data-ver>v0.1.8</span> · macOS 14+ · MIT License</span>
     <div class="f-links">
       <a href="https://github.com/yujuntea/gloss" target="_blank" rel="noopener">GitHub</a>
       <a href="https://github.com/yujuntea/gloss/releases" target="_blank" rel="noopener">Releases</a>
